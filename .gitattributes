@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+# Keep common binary assets out of text normalization.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
