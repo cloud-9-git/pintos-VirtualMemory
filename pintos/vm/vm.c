@@ -56,11 +56,16 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		ASSERT(VM_TYPE(type) != VM_ANON || VM_TYPE(type) != VM_FILE) 
+		
 		struct page *page;
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
 		
 		/* TODO: Insert the page into the spt. */
 		spt_insert_page(spt, page); 
+	} else {
+		printf("alloc과 initialized 하려는 페이지가 spt 페이지에 있습니다\n");
+		ASSERT(spt_find_page(spt, upage) != NULL)		
 	}
 	
 err:
@@ -167,10 +172,17 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 
+	struct thread *curr_process = thread_current(); 
 	/* TODO: Fill this function */
+	page = spt_find_page(curr_process->spt, va); 
+
+	if (page == NULL) {
+		return false; 
+	}
+	
 	return vm_do_claim_page (page);
 }
 
