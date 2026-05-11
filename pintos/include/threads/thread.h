@@ -106,13 +106,15 @@ struct  thread {
 
 	int nice;                           /* nice 값 */
 	int recent_cpu;                     /* 스레드가 최근에 사용한 CPU양 */
-
+	
 	/* 스레드가 깨어나야 하는 절대 tick 시각. */
 	int64_t wakeup_tick;
 
 	/* `thread.c`와 `synch.c`가 함께 사용한다. */
 	struct list_elem elem;              /* 리스트 원소. */
 	struct list_elem allelem;           /* 전체 리스트용 원소 */
+	
+	uint64_t *pml4;
 
 	int exit_status;               /* 종료 코드 */
 

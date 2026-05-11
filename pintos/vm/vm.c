@@ -3,7 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
-
+#include "threads/mmu.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -37,9 +37,12 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
-/* Create the pending page object with initializer. If you want to create a
- * page, do not create it directly and make it through this function or
- * `vm_alloc_page`. */
+/* type: 만들 페이지의 최종 종류 (VM_ANON, VM_FILE)
+ * upage: 이 페이지가 대표하는 유저 가상 주소 
+ * writable: PTE 매핑 시 write 권한을 줄지 말지 결정한다 
+ * init: page fault로 실제 frame을 붙일 때 내용을 어떻게 채울지 정하는 함수 
+ * aux: init이 실행될 때 필요한 부가 데이터 모음 (file, offset, read_bytes, zero_bytes)
+ *  */
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
@@ -53,8 +56,18 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		struct page *page; 
+		
+		if (type == VM_ANON) {
+			anon_initializer(page, type, page->frame->kva); 
+			// uninit_new(page, page->va, init, aux)
+		} else if (type == VM_FILE) {
 
+		}
+
+		
 		/* TODO: Insert the page into the spt. */
+		spt_insert_page(spt, page); 
 	}
 err:
 	return false;
@@ -67,6 +80,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	/* TODO: Fill this function. */
 
 	struct hash_elem *e;
+	
 	page->va = va;
 	e = hash_find (&spt->hash_table, &page->hash_elem);
 
@@ -120,11 +134,8 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	frame->kva = palloc_get_page (PAL_USER);
-	frame->page->frame = frame;
-
-	/* TODO: eviction */
-
+	frame->kva = palloc_get_page(PAL_USER);
+	
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
@@ -164,7 +175,9 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
+
 	/* TODO: Fill this function */
+	page = vm_do_claim_page(page);
 
 	return vm_do_claim_page (page);
 }
@@ -173,14 +186,20 @@ vm_claim_page (void *va UNUSED) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
-
+	
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-
-
+	/* TODO: 이 페이지의 가상 주소(VA)가 새로 얻은 
+	         frame의 물리 메모리 위치(PA)를 가리키도록 페이지 테이블에 매핑 정보를 등록 */	
+	struct thread *curr_process = thread_current();
+	bool va_pa_mapping_success = pml4_set_page(curr_process->pml4, page->va, frame->kva, page->writable);
+	
+	if (!va_pa_mapping_success) {
+		return false; 
+	}
+	
 	return swap_in (page, frame->kva);
 }
 

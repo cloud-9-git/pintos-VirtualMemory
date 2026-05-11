@@ -17,8 +17,7 @@ bool pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw);
 void pml4_clear_page (uint64_t *pml4, void *upage);
 bool pml4_is_dirty (uint64_t *pml4, const void *upage);
 void pml4_set_dirty (uint64_t *pml4, const void *upage, bool dirty);
-bool pml4_is_accessed (uint64_t *pml4, const void *upage);
-void pml4_set_accessed (uint64_t *pml4, const void *upage, bool accessed);
+bool pml4_is_accessed (uint64_t *pml4, const void *upage); void pml4_set_accessed (uint64_t *pml4, const void *upage, bool accessed);
 
 #define is_writable(pte) (*(pte) & PTE_W)
 #define is_user_pte(pte) (*(pte) & PTE_U)
