@@ -37,6 +37,10 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
+static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
+static bool page_less (const struct hash_elem *a_,
+		   const struct hash_elem *b_, void *aux UNUSED);
+
 /* type: 만들 페이지의 최종 종류 (VM_ANON, VM_FILE)
  * upage: 이 페이지가 대표하는 유저 가상 주소 
  * writable: PTE 매핑 시 write 권한을 줄지 말지 결정한다 
@@ -152,12 +156,30 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
+
+	/* Validate the fault */
+	/* Your code goes here */
+	/* # [커널/유저 공통] 읽기 전용 페이지에 쓰려고 한 경우 # */
+	if (!not_present) {
+		return false;
+	}
+
+	if (user) {
+		// 존재하지 않는 va인지는 확인 -> not_present
+		if (is_user_vaddr (addr) == false) {
+			return false;
+		}
+	}
+	/* # 커널인 경우에는 모든 주소 영역에 접근할 수 있으므로 예외처리를 하지 않는다. # */
+
+	page = spt_find_page (spt, addr);
+	if (page == NULL) {
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
@@ -177,7 +199,7 @@ vm_claim_page (void *va) {
 
 	struct thread *curr_process = thread_current(); 
 	/* TODO: Fill this function */
-	page = spt_find_page(curr_process->spt, va); 
+	page = spt_find_page(&curr_process->spt, va); 
 
 	if (page == NULL) {
 		return false; 
@@ -213,13 +235,13 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	hash_init (&spt->hash_table, page_hash, page_less, NULL);
 }
 
-unsigned
+static unsigned
 page_hash (const struct hash_elem *p_, void *aux UNUSED) {
 	const struct page *p = hash_entry (p_, struct page, hash_elem);
 	return hash_bytes (&p->va, sizeof p->va);
 }
 
-bool
+static bool
 page_less (const struct hash_elem *a_,
 		   const struct hash_elem *b_, void *aux UNUSED) {
 	const struct page *a = hash_entry (a_, struct page, hash_elem);

@@ -114,8 +114,6 @@ struct  thread {
 	struct list_elem elem;              /* 리스트 원소. */
 	struct list_elem allelem;           /* 전체 리스트용 원소 */
 	
-	uint64_t *pml4;
-
 	int exit_status;               /* 종료 코드 */
 
 #ifdef USERPROG
