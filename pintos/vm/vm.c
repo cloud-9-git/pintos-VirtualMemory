@@ -55,8 +55,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
+	struct page *spt_find_result_page = spt_find_page (spt, upage);
+
 	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page (spt, upage) == NULL) {
+	if (spt_find_result_page == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
@@ -68,8 +70,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Insert the page into the spt. */
 		spt_insert_page(spt, page); 
 	} else {
-		printf("alloc과 initialized 하려는 페이지가 spt 페이지에 있습니다\n");
-		ASSERT(spt_find_page(spt, upage) != NULL)		
+		spt_find_result_page ->uninit.init(upage, aux);
 	}
 	
 err:

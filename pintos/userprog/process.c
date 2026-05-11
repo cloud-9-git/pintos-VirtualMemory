@@ -956,11 +956,28 @@ install_page (void *upage, void *kpage, bool writable) {
 /* 여기부터의 코드는 project 3 이후에 사용된다.
  * project 2만 대상으로 구현하려면 위쪽 블록에 구현하라. */
 
+struct aux {
+		struct file *file_;
+		size_t page_read_bytes_;
+		size_t page_zero_bytes_;
+		bool writable_;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
+	if (file_read (file, page->frame->kva, aux->page_read_bytes_) != (int) aux->page_read_bytes_) {
+			palloc_free_page (page->kva);
+			return false;
+	}
+	memset (page->frame->kva + aux_->page_read_bytes_, 0, aux->page_zero_bytes_);
+	if (!install_page(page, page->frame->kva, aux->writable_)) {
+		return false;
+	}
+	return true;
+	
 }
 
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 적재한다.
@@ -992,6 +1009,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;
+		struct aux *aux_ = malloc(sizeof(struct aux));
+		aux_->file_ = file;
+		aux_->page_read_bytes_ = page_read_bytes;
+		aux_->page_zero_bytes_ = page_zero_bytes;
+		aux_->writable_ = writable;
+
+		aux = aux_;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;
