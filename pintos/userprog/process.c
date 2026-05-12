@@ -636,6 +636,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+ 
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -733,9 +734,11 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+
 					if (!load_segment (file, file_page, (void *) mem_page,
-								read_bytes, zero_bytes, writable))
+								read_bytes, zero_bytes, writable)) {						
 						goto done;
+					} 
 				}
 				else
 					goto done;
@@ -879,9 +882,13 @@ static bool install_page (void *upage, void *kpage, bool writable);
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+
 	ASSERT (pg_ofs (upage) == 0);
+
 	ASSERT (ofs % PGSIZE == 0);
+
 
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
@@ -956,11 +963,26 @@ install_page (void *upage, void *kpage, bool writable) {
 /* 여기부터의 코드는 project 3 이후에 사용된다.
  * project 2만 대상으로 구현하려면 위쪽 블록에 구현하라. */
 
+struct aux {
+	struct file *file;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+	bool writable;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
+
+	struct aux *aux_ = (struct aux *) aux;
+	if (file_read (aux_->file, page->frame->kva, aux_->page_read_bytes) != (int) aux_->page_read_bytes) {
+			palloc_free_page (page->frame->kva);
+			return false;
+	}
+	memset (page->frame->kva + aux_->page_read_bytes, 0, aux_->page_zero_bytes);
+	return true;
 }
 
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 적재한다.
@@ -979,9 +1001,11 @@ lazy_load_segment (struct page *page, void *aux) {
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
+
 
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산한다.
@@ -992,9 +1016,21 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;
+		struct aux *aux_ = malloc(sizeof(struct aux));
+		aux_->file = file;
+		aux_->page_read_bytes = page_read_bytes;
+		aux_->page_zero_bytes = page_zero_bytes;
+		aux_->writable = writable;
+
+		aux = aux_;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
-			return false;
+					writable, lazy_load_segment, aux)) {
+
+			free(aux_);
+			return false;			
+		}
+
 
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;

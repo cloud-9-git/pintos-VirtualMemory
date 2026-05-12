@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 #include "lib/kernel/hash.h"
+#include "include/threads/vaddr.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -47,6 +48,7 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
+	bool writable;         /* Whether the page is writable. */
 	struct hash_elem hash_elem;
 
 	/* Per-type data are binded into the union.
