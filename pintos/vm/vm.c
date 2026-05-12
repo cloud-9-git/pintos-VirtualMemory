@@ -63,9 +63,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		ASSERT(VM_TYPE(type) != VM_ANON || VM_TYPE(type) != VM_FILE) 
-	 
-		// struct page *page;
+		// ASSERT(VM_TYPE(type) == VM_ANON || VM_TYPE(type) == VM_FILE)
+
+		// # TODO: vm_type에 따라 initializer 할당하는 코드 if-else문으로 처리하기
+		
 		struct page *page = malloc(sizeof(struct page)); 
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
 
@@ -75,6 +76,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		if (spt_insert_succeed) {
 			return true; 
 		} else {
+			// # TODO: free (혹시 틀렸을 수도 있음)
+			free (page);
 			goto err; 
 		}
 	
@@ -97,13 +100,12 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
-
 	struct hash_elem *e;
 	struct thread *curr_process = thread_current(); 
 
+	// # TODO: hash_find() 사용하도록 변경하기
 	struct hash_iterator i;
 	hash_first (&i, &spt->hash_table);
-
 	while (hash_next (&i)) {	
     	page = hash_entry (hash_cur (&i), struct page, hash_elem);
 		if (page->va == va) {
@@ -163,9 +165,16 @@ vm_evict_frame (void) {
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
+	frame = malloc (sizeof (struct frame));
+	if (frame == NULL) {
+		PANIC ("TODO: Out of Memory - malloc (func: vm_get_frame)");
+	}
 	/* TODO: Fill this function. */
 	frame->kva = palloc_get_page(PAL_USER);
-	
+	if (frame->kva == NULL) {
+		PANIC ("TODO: Out of Memory - palloc (func: vm_get_frame)");
+	}
+
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
@@ -224,6 +233,10 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
+	page = malloc (sizeof (struct page));
+	if (page == NULL) {
+		return false;
+	}
 
 	struct thread *curr_process = thread_current(); 
 	/* TODO: Fill this function */
@@ -232,7 +245,7 @@ vm_claim_page (void *va) {
 	if (page == NULL) {
 		return false; 
 	}
-	
+
 	return vm_do_claim_page (page);
 }
 

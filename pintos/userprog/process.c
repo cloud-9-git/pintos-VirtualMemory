@@ -1050,6 +1050,24 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: 성공하면 rsp를 그에 맞게 설정한다.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다. */
 	/* TODO: 여기에 코드를 작성한다. */
+	// # 물리 페이지 할당하고 stack 타입으로 매핑
+	struct thread * curr_process = thread_current ();
+
+	 // # 할당할 수 있는 frame이 없는 경우
+	// # TODO: kva == NULL인 경우와 pml4_set_page()의 결과가 false인 경우의 처리 고민하기
+	// # TODO: free () 혹은 destroy () 처리 고민하기
+	bool alloc_success = vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true);
+	if (alloc_success) {
+		bool claim_page_success = vm_claim_page (stack_bottom);
+		if (claim_page_success) {	// 모두 성공한 경우
+			if_->rsp = USER_STACK;
+			success = true;
+		} else {	// malloc은 성공하고 claim은 실패한 경우
+			struct page *first_stack_page_marshmallow = spt_find_page (&curr_process->spt, stack_bottom);
+			spt_remove_page (&curr_process->spt, first_stack_page_marshmallow);
+		}
+	}
+	// else: vm_alloc_page()가 실패한 경우에는 아무것도 해주지 않아도 됨
 
 	return success;
 }
