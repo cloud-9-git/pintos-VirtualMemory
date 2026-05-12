@@ -59,6 +59,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_result_page == NULL) {
+	
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
@@ -66,9 +67,11 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		
 		struct page *page;
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
-		
+
 		/* TODO: Insert the page into the spt. */
 		spt_insert_page(spt, page); 
+
+
 	} else {
 		spt_find_result_page ->uninit.init(upage, aux);
 	}
@@ -80,21 +83,34 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
+
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
 
 	struct hash_elem *e;
+	struct thread *curr_process = thread_current(); 
 	
-	page->va = va;
-	e = hash_find (&spt->hash_table, &page->hash_elem);
+	// page->va = va;
+	
+	struct hash_iterator i;
+	hash_first (&i, &spt->hash_table);
+	
+	while (hash_next (&i)) {	
+    	page = hash_entry (hash_cur (&i), struct page, hash_elem);
+		if (page->va == va) {
+			break;
+		}
+	}
 
-	return page != NULL ? hash_entry (e, struct page, hash_elem) : NULL;
+	// e = hash_find (&spt->hash_table, &page->hash_elem);
+
+	return page != NULL ? page : NULL;
 }
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
 	int succ = false;
 	/* TODO: Fill this function. */
 	struct hash_elem *e;

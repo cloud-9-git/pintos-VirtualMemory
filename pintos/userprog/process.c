@@ -636,6 +636,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+ 
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -733,9 +734,11 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+
 					if (!load_segment (file, file_page, (void *) mem_page,
-								read_bytes, zero_bytes, writable))
+								read_bytes, zero_bytes, writable)) {						
 						goto done;
+					} 
 				}
 				else
 					goto done;
@@ -879,9 +882,13 @@ static bool install_page (void *upage, void *kpage, bool writable);
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+
 	ASSERT (pg_ofs (upage) == 0);
+
 	ASSERT (ofs % PGSIZE == 0);
+
 
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
@@ -994,9 +1001,11 @@ lazy_load_segment (struct page *page, void *aux) {
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
+
 
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산한다.
@@ -1017,6 +1026,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux)) {
+
 			free(aux_);
 			return false;			
 		}
