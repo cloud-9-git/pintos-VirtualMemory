@@ -4,7 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/mmu.h"
-/* Initializes the virtual memory subsystem by invoking each subsystem's
+/* Initializes the virtpual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
 vm_init (void) {
@@ -54,8 +54,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
-	struct page *spt_find_result_page = spt_find_page (spt, upage);
+	
+	struct page *spt_find_result_page = spt_find_page (spt, upage);	
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_result_page == NULL) {
@@ -64,16 +64,27 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 		ASSERT(VM_TYPE(type) != VM_ANON || VM_TYPE(type) != VM_FILE) 
-		
-		struct page *page;
+	 
+		// struct page *page;
+		struct page *page = malloc(sizeof(struct page)); 
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
 
 		/* TODO: Insert the page into the spt. */
-		spt_insert_page(spt, page); 
-
-
+		bool spt_insert_succeed = spt_insert_page(spt, page); 
+		
+		if (spt_insert_succeed) {
+			return true; 
+		} else {
+			goto err; 
+		}
+	
 	} else {
-		spt_find_result_page ->uninit.init(upage, aux);
+		bool spt_init_insert_succeed = spt_find_result_page->uninit.init(upage, aux);
+		if (spt_init_insert_succeed) {
+			return true; 
+		} else {
+			goto err; 
+		}
 	}
 	
 err:
@@ -89,19 +100,18 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 	struct hash_elem *e;
 	struct thread *curr_process = thread_current(); 
-	
-	// page->va = va;
-	
+
 	struct hash_iterator i;
 	hash_first (&i, &spt->hash_table);
-	
+
 	while (hash_next (&i)) {	
     	page = hash_entry (hash_cur (&i), struct page, hash_elem);
 		if (page->va == va) {
 			break;
 		}
 	}
-
+	// original code
+	// page->va = va;
 	// e = hash_find (&spt->hash_table, &page->hash_elem);
 
 	return page != NULL ? page : NULL;
@@ -164,6 +174,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+
 }
 
 /* Handle the fault on write_protected page */
