@@ -203,14 +203,19 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		if (is_user_vaddr (addr) == false) {
 			return false;
 		}
+	} else {
+		if (is_user_vaddr (addr) == false) {
+			PANIC("Kernel VA fault");
+		}
+		// 커널 영역에서 일어난 일이지만 유저 포인터에 접근하다가 생긴 fault는 anon page를 만들어서 넣어줌
+		// 커널 주소에 접근하면 kernel bug panic 처리함
 	}
-	/* # 커널인 경우에는 모든 주소 영역에 접근할 수 있으므로 예외처리를 하지 않는다. # */
 
 	page = spt_find_page (spt, addr);
 	if (page == NULL) {
 		// TODO: stack growth 판단을 넣어줘야 함
 		// 	1. 유저 stack영역인지 확인한다
-		// 	2. rsp 근처인지 확인한다
+		// 	2. rsp 근처인지 확인한다(이때 rsp는 현재 스레드의 user_rsp필드 안에 들어있는 값을 사용한다)
 		// 해당 되면 stack_growth한다.
 
 		return false;

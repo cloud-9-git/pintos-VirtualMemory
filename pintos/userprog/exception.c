@@ -117,6 +117,7 @@ page_fault (struct intr_frame *f) {
 	   명령어의 주소(f->rip)와 같지는 않다. */
 
 	fault_addr = (void *) rcr2();
+	thread_current ()->user_rsp = f->rsp;
 
 	/* 인터럽트를 다시 켠다. 인터럽트를 껐던 이유는 CR2가 바뀌기 전에
 	   확실히 읽기 위해서뿐이었다. */
