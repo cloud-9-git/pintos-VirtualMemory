@@ -20,6 +20,7 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "intrinsic.h"
+#define VM
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -978,7 +979,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
 
 	struct aux *aux_ = (struct aux *) aux;
-	if (file_read (aux_->file, page->frame->kva, aux_->page_read_bytes) != (int) aux_->page_read_bytes) {
+	if (file_read_at (aux_->file, page->frame->kva, aux_->page_read_bytes, aux_->offset) != (int) aux_->page_read_bytes) {
 			palloc_free_page (page->frame->kva);
 			return false;
 	}
@@ -1007,7 +1008,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
@@ -1018,6 +1018,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;
 		struct aux *aux_ = malloc(sizeof(struct aux));
+		if (aux_ == NULL) {
+			// TODO: heap영역도 부족하면 swap out 해야하나?
+			return false;
+		}
 		aux_->file = file;
 		aux_->page_read_bytes = page_read_bytes;
 		aux_->page_zero_bytes = page_zero_bytes;
@@ -1032,7 +1036,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			free(aux_);
 			return false;			
 		}
-
 
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
