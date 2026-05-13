@@ -69,6 +69,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		struct page *page = malloc(sizeof(struct page)); 
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
+		page->writable = writable; 
 
 		/* TODO: Insert the page into the spt. */
 		bool spt_insert_succeed = spt_insert_page(spt, page); 
@@ -92,7 +93,6 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
-
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
 	struct hash_elem *e;
@@ -100,30 +100,29 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 	// # TODO: hash_find() 사용하도록 변경하기
 	struct page dummy; 
+
 	dummy.va = pg_round_down (va);
 	e = hash_find (&spt->hash_table, &dummy.hash_elem);
+
 	if (e != NULL) {
 		page = hash_entry (e, struct page, hash_elem);
 	}
-
 
 	return page != NULL ? page : NULL;
 }
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt,
-		struct page *page) {
-	int succ = false;
-	/* TODO: Fill this function. */
-	struct hash_elem *e;
-	e = hash_insert (&spt->hash_table, &page->hash_elem);
+spt_insert_page(struct supplemental_page_table *spt, struct page *page)
+{
+    struct hash_elem *e;
 
-	succ = e == NULL ? true : false;
 
-	return succ;
+    e = hash_insert(&spt->hash_table, &page->hash_elem);
+
+
+    return e == NULL;
 }
-
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	vm_dealloc_page (page);
@@ -203,13 +202,13 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	/* Validate the fault */
 	/* Your code goes here */
 	/* # [커널/유저 공통] 읽기 전용 페이지에 쓰려고 한 경우 # */
-	if (!not_present) {
+	if (!not_present) {	
 		return false;
 	}
 
 	if (user) {
 		// 존재하지 않는 va인지는 확인 -> not_present
-		if (is_user_vaddr (addr) == false) {
+		if (is_user_vaddr (addr) == false) {	
 			return false;
 		}
 	} else {
