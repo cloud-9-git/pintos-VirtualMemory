@@ -59,20 +59,20 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_result_page == NULL) {
-	
+		
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 		// ASSERT(VM_TYPE(type) == VM_ANON || VM_TYPE(type) == VM_FILE)
 
 		// # TODO: vm_type에 따라 initializer 할당하는 코드 if-else문으로 처리하기
-		
+
 		struct page *page = malloc(sizeof(struct page)); 
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
 
 		/* TODO: Insert the page into the spt. */
 		bool spt_insert_succeed = spt_insert_page(spt, page); 
-		
+
 		if (spt_insert_succeed) {
 			return true; 
 		} else {
@@ -81,13 +81,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			goto err; 
 		}
 	
-	} else {
-		bool spt_init_insert_succeed = spt_find_result_page->uninit.init(upage, aux);
-		if (spt_init_insert_succeed) {
-			return true; 
-		} else {
-			goto err; 
-		}
+	} else {	
+		goto err; 
 	}
 	
 err:
@@ -106,8 +101,11 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	// # TODO: hash_find() 사용하도록 변경하기
 	struct page dummy; 
 	dummy.va = pg_round_down (va);
-	e = hash_find (&spt->hash_table, &page->hash_elem);
-	page = hash_entry (e, struct page, hash_elem);
+	e = hash_find (&spt->hash_table, &dummy.hash_elem);
+	if (e != NULL) {
+		page = hash_entry (e, struct page, hash_elem);
+	}
+
 
 	return page != NULL ? page : NULL;
 }
@@ -164,12 +162,14 @@ vm_get_frame (void) {
 	}
 	/* TODO: Fill this function. */
 	frame->kva = palloc_get_page(PAL_USER);
+	frame->page = NULL; 
+	
 	if (frame->kva == NULL) {
 		PANIC ("TODO: Out of Memory - palloc (func: vm_get_frame)");
 	}
 
 	ASSERT (frame != NULL);
-	ASSERT (frame->page == NULL);
+	ASSERT (frame->page == NULL);	
 	return frame;
 }
 
@@ -213,9 +213,9 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			return false;
 		}
 	} else {
-		if (is_user_vaddr (addr) == false) {
-			PANIC("Kernel VA fault");
-		}
+		// if (is_user_vaddr (addr) == false) {
+		// 	PANIC("Kernel VA fault");
+		// }
 		// 커널 영역에서 일어난 일이지만 유저 포인터에 접근하다가 생긴 fault는 anon page를 만들어서 넣어줌
 		// 커널 주소에 접근하면 kernel bug panic 처리함
 	}

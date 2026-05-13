@@ -20,7 +20,7 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "intrinsic.h"
-#define VM
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -74,6 +74,7 @@ process_init (void) {
  * 이 함수는 반드시 한 번만 호출해야 한다. */
 tid_t
 process_create_initd (const char *file_name) {
+	
 	char *fn_copy;
 	tid_t tid;
 	struct thread *cur = thread_current ();
@@ -378,6 +379,7 @@ process_exec (void *f_name) {
 
 	/* 그다음 바이너리를 적재한다. */
 	success = load (file_name, &_if);
+
 	palloc_free_page (file_name);
 
 	/* 적재에 실패하면 종료한다. */
@@ -637,7 +639,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
- 
+
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -650,6 +652,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 	strlcpy(file_name_copy, file_name, PGSIZE);
+
 	/* NULL까지 반복하여 argv 만들기 */
 	char *argv[64];
 	char *save_ptr;
@@ -663,6 +666,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		argc++;
 		token = strtok_r(NULL, " ", &save_ptr);
 	}
+	
 	argv[argc] = NULL; // 배열의 마지막 값은 NULL로 설정
 
 	/* 페이지 디렉터리를 할당하고 활성화한다. */
@@ -740,6 +744,7 @@ load (const char *file_name, struct intr_frame *if_) {
 								read_bytes, zero_bytes, writable)) {						
 						goto done;
 					} 
+		
 				}
 				else
 					goto done;
@@ -1018,6 +1023,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;
 		struct aux *aux_ = malloc(sizeof(struct aux));
+
 		if (aux_ == NULL) {
 			// TODO: heap영역도 부족하면 swap out 해야하나?
 			return false;
@@ -1029,10 +1035,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		aux_->writable = writable;
 
 		aux = aux_;
-
+	
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux)) {
-
+					writable, lazy_load_segment, aux)) {	
+	
 			free(aux_);
 			return false;			
 		}

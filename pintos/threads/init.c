@@ -76,7 +76,7 @@ main (void) {
 	/* 명령줄을 인자로 나누고 옵션을 파싱한다. */
 	argv = read_command_line ();
 	argv = parse_options (argv);
-
+	
 	/* 락을 쓸 수 있도록 현재 실행 흐름을 스레드로 초기화한 뒤,
 	   콘솔 락을 활성화한다. */
 	thread_init ();
@@ -97,6 +97,7 @@ main (void) {
 	timer_init ();
 	kbd_init ();
 	input_init ();
+
 #ifdef USERPROG
 	exception_init ();
 	syscall_init ();
@@ -113,6 +114,7 @@ main (void) {
 #endif
 
 #ifdef VM
+	
 	vm_init ();
 #endif
 
@@ -236,6 +238,7 @@ parse_options (char **argv) {
 /* `ARGV[1]`에 지정된 작업을 실행한다. */
 static void
 run_task (char **argv) {
+
 	const char *task = argv[1];
 
 	printf ("Executing '%s':\n", task);
@@ -287,12 +290,14 @@ run_actions (char **argv) {
 
 		/* 필요한 인자가 있는지 확인한다. */
 		for (i = 1; i < a->argc; i++)
-			if (argv[i] == NULL)
+			if (argv[i] == NULL) {	
 				PANIC ("action `%s' requires %d argument(s)", *argv, a->argc - 1);
-
+			}
+		
 		/* 동작을 호출하고 다음으로 넘어간다. */
 		a->function (argv);
 		argv += a->argc;
+
 	}
 
 }
