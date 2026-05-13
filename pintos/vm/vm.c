@@ -104,7 +104,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct thread *curr_process = thread_current (); 
 
 	// # TODO: hash_find() 사용하도록 변경하기
-	struct page dummy;
+	struct page dummy; 
 	dummy.va = pg_round_down (va);
 	e = hash_find (&spt->hash_table, &page->hash_elem);
 	page = hash_entry (e, struct page, hash_elem);
@@ -175,8 +175,17 @@ vm_get_frame (void) {
 
 /* Growing the stack. */
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr) {
+	// TODO: 실패시 처리 return으로 충분한지, swap out같은걸 해야 하는지
+	bool stack_page_alloc_success = vm_alloc_page (VM_ANON | VM_MARKER_0, addr, true);
+	if (stack_page_alloc_success == false) {
+		return;
+	}
 
+	bool page_claim_success = vm_claim_page(addr);
+	if (page_claim_success == false) {
+		return;
+	}
 }
 
 /* Handle the fault on write_protected page */
@@ -216,11 +225,16 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		// TODO: stack growth 판단을 넣어줘야 함
 		// 	1. 유저 stack영역인지 확인한다
 		// 	2. rsp 근처인지 확인한다(이때 rsp는 현재 스레드의 user_rsp필드 안에 들어있는 값을 사용한다)
-		// 해당 되면 stack_growth한다.
-
-		return false;
+		// 	3. 커널에서 접근한 걸 때는 rsp값이 달라지므로 fault가 나서 커널모드에 들어오는 순간 저장한 thread 구조체의 필드 user_rsp값을 써야 한다.
+		if (is_user_vaddr(addr) && ((thread_current ()->user_rsp) - 8 <= addr) && (addr < USER_STACK) && (addr >= (USER_STACK - STACK_MAX_SIZE))) {
+			// 해당 되면 stack_growth한다.
+			// TODO: vm_stack_growth 실패할 경우 처리 방법
+			vm_stack_growth(addr);
+			return true;
+		} else {
+			return false;
+		}
 	}
-
 	return vm_do_claim_page (page);
 }
 

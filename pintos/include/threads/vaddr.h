@@ -37,6 +37,8 @@
 /* 사용자 스택 시작점. */
 #define USER_STACK 0x47480000
 
+#define STACK_MAX_SIZE (1 << 20)
+
 /* `VADDR`가 사용자 가상 주소이면 true를 반환한다. */
 #define is_user_vaddr(vaddr) (!is_kernel_vaddr((vaddr)))
 
