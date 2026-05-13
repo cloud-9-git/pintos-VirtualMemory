@@ -101,20 +101,13 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
 	struct hash_elem *e;
-	struct thread *curr_process = thread_current(); 
+	struct thread *curr_process = thread_current (); 
 
 	// # TODO: hash_find() 사용하도록 변경하기
-	struct hash_iterator i;
-	hash_first (&i, &spt->hash_table);
-	while (hash_next (&i)) {	
-    	page = hash_entry (hash_cur (&i), struct page, hash_elem);
-		if (page->va == va) {
-			break;
-		}
-	}
-	// original code
-	// page->va = va;
-	// e = hash_find (&spt->hash_table, &page->hash_elem);
+	struct page dummy;
+	dummy.va = pg_round_down (va);
+	e = hash_find (&spt->hash_table, &page->hash_elem);
+	page = hash_entry (e, struct page, hash_elem);
 
 	return page != NULL ? page : NULL;
 }
@@ -215,6 +208,11 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 
 	page = spt_find_page (spt, addr);
 	if (page == NULL) {
+		// TODO: stack growth 판단을 넣어줘야 함
+		// 	1. 유저 stack영역인지 확인한다
+		// 	2. rsp 근처인지 확인한다
+		// 해당 되면 stack_growth한다.
+
 		return false;
 	}
 

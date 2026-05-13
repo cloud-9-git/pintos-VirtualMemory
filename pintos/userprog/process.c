@@ -719,7 +719,7 @@ load (const char *file_name, struct intr_frame *if_) {
 				if (validate_segment (&phdr, file)) {
 					bool writable = (phdr.p_flags & PF_W) != 0;
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
-					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
+					uint64_t mem_page = phdr.p_vaddr & ~PGMASK; // VA를 round_down해준다
 					uint64_t page_offset = phdr.p_vaddr & PGMASK;
 					uint32_t read_bytes, zero_bytes;
 					if (phdr.p_filesz > 0) {
@@ -967,6 +967,7 @@ struct aux {
 	struct file *file;
 	size_t page_read_bytes;
 	size_t page_zero_bytes;
+	off_t offset;
 	bool writable;
 };
 
@@ -1020,6 +1021,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		aux_->file = file;
 		aux_->page_read_bytes = page_read_bytes;
 		aux_->page_zero_bytes = page_zero_bytes;
+		aux_->offset = ofs;
 		aux_->writable = writable;
 
 		aux = aux_;
@@ -1035,6 +1037,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
+		ofs += PGSIZE;
 		upage += PGSIZE;
 	}
 	return true;
