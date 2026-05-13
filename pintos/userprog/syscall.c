@@ -18,6 +18,7 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include "threads/malloc.h"
+#include "vm/vm.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -217,7 +218,29 @@ syscall_handler (struct intr_frame *f) {
 		/* read(fd, buffer, size)의 인자는 syscall_entry가 저장한 레지스터에서
 		 * 꺼낸다. rdi는 fd, rsi는 사용자 버퍼 주소, rdx는 읽을 바이트 수다.
 		 * 시스템 콜 반환값도 rax로 돌아가므로 read() 결과를 f->R.rax에 저장한다. */
-		f->R.rax = read((int) f->R.rdi, (void *) f->R.rsi, (unsigned) f->R.rdx);
+		int fd = (int) f->R.rdi;
+		const void *buffer = (const void *) f->R.rsi;
+		size_t size = (size_t) f->R.rdx;
+
+		if (size == 0) {
+			f->R.rax = 0;
+			break;
+		}
+
+		if (fd == 1) {
+			f->R.rax = 0;
+			break;
+		} else if (fd >= 2) {
+			struct fd_entry *entry = find_fd_entry(fd);
+			if (entry == NULL || entry->file == NULL) {
+				f->R.rax = -1;
+				break;
+			}
+			validate_user_buffer(buffer, size);
+			f->R.rax = read(fd, buffer, size);
+		} else {
+			f->R.rax = -1;
+		}
 		break;
 	}
 
@@ -347,8 +370,9 @@ static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
 
+	//pml4_get_page(cur->pml4, ptr) 는 VM에서는 기준이 될 수 없다: lazy load나 stack growth로 인해 pml4에는 아직 매핑되지 않은 페이지가 많기 떄문이다
 	if (ptr == NULL || !is_user_vaddr(ptr) ||
-			pml4_get_page(cur->pml4, ptr) == NULL) {
+			((spt_find_page(&cur->spt, ptr) == NULL) && !(is_user_vaddr(ptr) && ((cur->user_rsp) - 8 <= ptr) && (ptr < USER_STACK) && (ptr >= (USER_STACK - STACK_MAX_SIZE))))) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
