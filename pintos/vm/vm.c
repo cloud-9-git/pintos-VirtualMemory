@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/mmu.h"
+#include <string.h>
 /* Initializes the virtpual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -69,7 +70,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		struct page *page = malloc(sizeof(struct page)); 
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
-		page->writable = writable; 
+		page->writable = writable;
 
 		/* TODO: Insert the page into the spt. */
 		bool spt_insert_succeed = spt_insert_page(spt, page); 
@@ -309,8 +310,38 @@ page_less (const struct hash_elem *a_,
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	//for (src buckets를 돌기)
+	struct hash_iterator i;
+	hash_first(&i, src);
+	while (hash_next (&i)) {
+    	struct page *source_page = hash_entry (hash_cur (&i), struct page, hash_elem);
+		enum vm_type type;
+		vm_initializer *init;
+		void *aux;
+		
+		switch (source_page->operations->type) {
+			case (VM_UNINIT):
+				type = VM_UNINIT;
+				init = source_page->uninit.init;
+				aux = source_page->uninit.aux;
+				break;
+			case (VM_ANON):
+				type = source_page->anon.type;
+				init = source_page->anon.init;
+				aux = source_page->anon.aux;
+				break;
+			case (VM_FILE):
+				type = VM_FILE;
+				init = source_page->file.init;
+				aux = source_page->file.aux;
+				break;
+			default:
+				NOT_REACHED ();
+		}
+		vm_alloc_page_with_initializer(type, source_page->va, source_page->writable, init, aux);
+	}
 }
 
 /* Free the resource hold by the supplemental page table */

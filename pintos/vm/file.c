@@ -24,6 +24,11 @@ bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &file_ops;
+	page->file = (struct file_page) {
+		.type = type,
+		.init = page->uninit.init,
+		.aux = page->uninit.aux,
+	};
 
 	struct file_page *file_page = &page->file;
 }
