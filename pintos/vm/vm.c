@@ -51,7 +51,7 @@ static bool page_less (const struct hash_elem *a_,
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
-
+	
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
@@ -67,23 +67,27 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		// ASSERT(VM_TYPE(type) == VM_ANON || VM_TYPE(type) == VM_FILE)
 
 		// # TODO: vm_type에 따라 initializer 할당하는 코드 if-else문으로 처리하기
-
+	
 		struct page *page = malloc(sizeof(struct page)); 
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
 		page->writable = writable;
-
+		
+		
 		/* TODO: Insert the page into the spt. */
 		bool spt_insert_succeed = spt_insert_page(spt, page); 
+	
+		if (spt_insert_succeed) {			
 
-		if (spt_insert_succeed) {
 			return true; 
 		} else {
+
 			// # TODO: free (혹시 틀렸을 수도 있음)
 			free (page);
 			goto err; 
 		}
 	
 	} else {	
+	
 		goto err; 
 	}
 	
@@ -118,9 +122,7 @@ spt_insert_page(struct supplemental_page_table *spt, struct page *page)
 {
     struct hash_elem *e;
 
-
-    e = hash_insert(&spt->hash_table, &page->hash_elem);
-
+	e = hash_insert(&spt->hash_table, &page->hash_elem);
 
     return e == NULL;
 }
@@ -219,7 +221,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		// 커널 영역에서 일어난 일이지만 유저 포인터에 접근하다가 생긴 fault는 anon page를 만들어서 넣어줌
 		// 커널 주소에 접근하면 kernel bug panic 처리함
 	}
-
+	// TODO: page 구조체에 owner
 	page = spt_find_page (spt, addr);
 	if (page == NULL) {
 		// TODO: stack growth 판단을 넣어줘야 함
@@ -315,33 +317,40 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	//for (src buckets를 돌기)
 	struct hash_iterator i;
 	hash_first(&i, src);
+
 	while (hash_next (&i)) {
     	struct page *source_page = hash_entry (hash_cur (&i), struct page, hash_elem);
+
 		enum vm_type type;
 		vm_initializer *init;
 		void *aux;
 		
-		switch (source_page->operations->type) {
-			case (VM_UNINIT):
-				type = VM_UNINIT;
+		enum vm_type type_i_love_pintos = source_page->operations->type; 
+
+		switch (type_i_love_pintos) {
+			case (VM_UNINIT):								
+				type = source_page->uninit.type;
 				init = source_page->uninit.init;
 				aux = source_page->uninit.aux;
 				break;
 			case (VM_ANON):
-				type = source_page->anon.type;
-				init = source_page->anon.init;
-				aux = source_page->anon.aux;
+				type = source_page->anon.type;						
 				break;
 			case (VM_FILE):
 				type = VM_FILE;
-				init = source_page->file.init;
-				aux = source_page->file.aux;
 				break;
 			default:
 				NOT_REACHED ();
 		}
-		vm_alloc_page_with_initializer(type, source_page->va, source_page->writable, init, aux);
+	
+		if (type_i_love_pintos == VM_ANON || type_i_love_pintos == VM_FILE) {
+			vm_alloc_page(type, source_page->va, source_page->writable); 
+		}
+		else {						 
+			vm_alloc_page_with_initializer(type, source_page->va, source_page->writable, init, aux);
+		}
 	}
+	return true; 
 }
 
 /* Free the resource hold by the supplemental page table */
