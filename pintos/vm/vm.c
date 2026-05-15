@@ -254,11 +254,6 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
-	page = malloc (sizeof (struct page));
-	if (page == NULL) {
-		return false;
-	}
-
 	struct thread *curr_process = thread_current(); 
 	/* TODO: Fill this function */
 	page = spt_find_page(&curr_process->spt, va); 
