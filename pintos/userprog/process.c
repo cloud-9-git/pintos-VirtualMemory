@@ -298,7 +298,6 @@ __do_fork (void *aux_) {
 	if (current->pml4 == NULL) {
 		goto error;
 	}
-
 	process_activate(current);
 
 #ifdef VM

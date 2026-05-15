@@ -322,36 +322,39 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 		enum vm_type type;
 		vm_initializer *init;
 		void *aux;
-		
-		enum vm_type type_i_love_pintos = source_page->operations->type; 
 
-		switch (type_i_love_pintos) {	
-			case (VM_UNINIT):											
+		enum vm_type type_i_love_pintos = source_page->operations->type;
+
+		switch (type_i_love_pintos) {
+			case (VM_UNINIT):
 				type = source_page->uninit.type;
 				init = source_page->uninit.init;
 				aux = source_page->uninit.aux;
 				break;
 			case (VM_ANON):
-				type = source_page->anon.type;										
+				type = source_page->anon.type;
 				break;
-			case (VM_FILE):						
+			case (VM_FILE):
 				type = VM_FILE;
 				break;
 			default:
 				NOT_REACHED ();
 		}
-	
-		if (type_i_love_pintos == VM_ANON || type_i_love_pintos == VM_FILE) {			
-			vm_alloc_page(type, source_page->va, source_page->writable); 				
-			vm_claim_page(source_page->va); 
-		}
-		else {					 
-			vm_alloc_page_with_initializer(type, source_page->va, source_page->writable, init, aux);
-		}
 
+		if (type_i_love_pintos == VM_ANON || type_i_love_pintos == VM_FILE) {
+			if (!vm_alloc_page (type, source_page->va, source_page->writable)) {
+				return false;
+			} else {
+				vm_claim_page (source_page->va);
+			}
+		} else {
+			if (!vm_alloc_page_with_initializer (type, source_page->va, source_page->writable, init, aux)) {
+				return false;
+			}
+		}
 	}
 
-	return true; 
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
