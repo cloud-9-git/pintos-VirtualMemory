@@ -70,7 +70,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	
 		struct page *page = malloc(sizeof(struct page)); 
 
-		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
+		uninit_new (page, upage, init, type, aux, VM_TYPE(type) == VM_ANON ? anon_initializer : file_backed_initializer);
 		page->writable = writable;
 		
 		/* TODO: Insert the page into the spt. */
