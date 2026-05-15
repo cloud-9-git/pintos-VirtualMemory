@@ -69,25 +69,22 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		// # TODO: vm_type에 따라 initializer 할당하는 코드 if-else문으로 처리하기
 	
 		struct page *page = malloc(sizeof(struct page)); 
+
 		uninit_new (page, upage, init, type, aux, type == VM_ANON ? anon_initializer : file_backed_initializer);
 		page->writable = writable;
-		
 		
 		/* TODO: Insert the page into the spt. */
 		bool spt_insert_succeed = spt_insert_page(spt, page); 
 	
 		if (spt_insert_succeed) {			
-
 			return true; 
 		} else {
-
 			// # TODO: free (혹시 틀렸을 수도 있음)
 			free (page);
 			goto err; 
 		}
 	
-	} else {	
-	
+	} else {		
 		goto err; 
 	}
 	
@@ -314,6 +311,7 @@ page_less (const struct hash_elem *a_,
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src) {
+
 	//for (src buckets를 돌기)
 	struct hash_iterator i;
 	hash_first(&i, src);
@@ -327,42 +325,45 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 		
 		enum vm_type type_i_love_pintos = source_page->operations->type; 
 
-		switch (type_i_love_pintos) {
-			case (VM_UNINIT):								
+		switch (type_i_love_pintos) {	
+			case (VM_UNINIT):											
 				type = source_page->uninit.type;
 				init = source_page->uninit.init;
 				aux = source_page->uninit.aux;
 				break;
 			case (VM_ANON):
-				type = source_page->anon.type;						
+				type = source_page->anon.type;										
 				break;
-			case (VM_FILE):
+			case (VM_FILE):						
 				type = VM_FILE;
 				break;
 			default:
 				NOT_REACHED ();
 		}
 	
-		if (type_i_love_pintos == VM_ANON || type_i_love_pintos == VM_FILE) {
-			vm_alloc_page(type, source_page->va, source_page->writable); 
+		if (type_i_love_pintos == VM_ANON || type_i_love_pintos == VM_FILE) {			
+			vm_alloc_page(type, source_page->va, source_page->writable); 				
+			vm_claim_page(source_page->va); 
 		}
-		else {						 
+		else {					 
 			vm_alloc_page_with_initializer(type, source_page->va, source_page->writable, init, aux);
 		}
+
 	}
+
 	return true; 
 }
 
 /* Free the resource hold by the supplemental page table */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
-	struct hash_iterator i; 
-	hash_first (&i, &spt->hash_table);
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
+	struct hash_iterator i;
 
-	while (hash_next (&i)) {		
-		struct page *curr_page = hash_entry(hash_cur (&i), struct page, hash_elem); 
-		destroy(curr_page); 
+	hash_first (&i, &spt->hash_table);
+	while (hash_next (&i)) {
+		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
+		
+		hash_delete (&spt->hash_table, &page->hash_elem);
+		destroy (page);
 	}
 }
