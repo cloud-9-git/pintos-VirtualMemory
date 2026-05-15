@@ -357,6 +357,17 @@ process_exec (void *f_name) {
 	uint64_t *old_pml4 = current->pml4;
 	struct file *old_exec_file = current->exec_file;
 
+	/*  # 이지섭 (26/05/16):
+		NOTE: supplemental_page_table_copy()를 사용하지 않는 이유: malloc 정보가 동일해야 하기 때문. copy()를 쓰는 경우는 malloc 정보가 달라야 하기 때문.
+		exec: 기존에 실행되던 프로그램의 컨텍스트를 새롭게 실행할 프로그램의 컨텍스트로 변경한다.
+		원래 의도: SPT를 새롭게 초기화 해줘야 한다.
+		조건: load 이전에 SPT를 새롭게 초기화 해야 한다.
+
+		load 성공하는 경우: 기존의 SPT를 정리한다. -> kill (&old_spt);
+		load 실패하는 경우: 기존의 SPT를 사용하고 새롭게 만든 SPT를 정리한다. -> kill (&current->spt); current->spt = old_spt; 
+	*/
+
+	struct supplemental_page_table old_spt = current->spt;
 
 	/* thread 구조체 안의 intr_frame은 사용할 수 없다.
 	 * 현재 스레드가 다시 스케줄될 때 해당 멤버에 실행 정보가 저장되기
@@ -365,6 +376,8 @@ process_exec (void *f_name) {
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
+
+	supplemental_page_table_init (&thread_current ()->spt);
 
 	/* 
 	 * 문맥 정리 후 적재하면 load 실패 시 데이터 손실 발생
@@ -385,6 +398,8 @@ process_exec (void *f_name) {
 	if (!success) {
 		uint64_t *new_pml4 = current->pml4;
 		current->pml4 = old_pml4;
+		supplemental_page_table_kill (&current->spt);	// # 새로 만들었던 SPT 해제
+		current->spt = old_spt;							// # 원래 SPT로 복구
 
 		process_activate(current);
 
@@ -404,6 +419,9 @@ process_exec (void *f_name) {
 		pml4_destroy(old_pml4);
 	}
 
+	// # 성공하는 경우
+	supplemental_page_table_kill (&old_spt);
+	
 	/* 전환된 프로세스를 시작한다. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -738,9 +756,8 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
-
 					if (!load_segment (file, file_page, (void *) mem_page,
-								read_bytes, zero_bytes, writable)) {						
+								read_bytes, zero_bytes, writable)) {
 						goto done;
 					} 
 		
@@ -887,13 +904,11 @@ static bool install_page (void *upage, void *kpage, bool writable);
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 
 	ASSERT (pg_ofs (upage) == 0);
 
 	ASSERT (ofs % PGSIZE == 0);
-
 
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
@@ -968,13 +983,13 @@ install_page (void *upage, void *kpage, bool writable) {
 /* 여기부터의 코드는 project 3 이후에 사용된다.
  * project 2만 대상으로 구현하려면 위쪽 블록에 구현하라. */
 
-struct aux {
-	struct file *file;
-	size_t page_read_bytes;
-	size_t page_zero_bytes;
-	off_t offset;
-	bool writable;
-};
+// struct aux {
+// 	struct file *file;
+// 	size_t page_read_bytes;
+// 	size_t page_zero_bytes;
+// 	off_t offset;
+// 	bool writable;
+// };
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {

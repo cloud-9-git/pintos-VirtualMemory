@@ -5,6 +5,7 @@
 #include "vm/inspect.h"
 #include "threads/mmu.h"
 #include <string.h>
+#include "userprog/process.h"
 /* Initializes the virtpual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -320,7 +321,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
     	struct page *source_page = hash_entry (hash_cur (&i), struct page, hash_elem);
 		enum vm_type type;
 		vm_initializer *init;
-		void *aux;
+		void *aux = NULL;
 
 		enum vm_type type_i_love_pintos = source_page->operations->type;
 
@@ -328,7 +329,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 			case (VM_UNINIT):
 				type = source_page->uninit.type;
 				init = source_page->uninit.init;
-				aux = source_page->uninit.aux;
+				aux = malloc (sizeof (struct aux));
+				memcpy (aux, source_page->uninit.aux, sizeof (struct aux));
 				break;
 			case (VM_ANON):
 				type = source_page->anon.type;
