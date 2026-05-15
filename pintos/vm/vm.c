@@ -366,11 +366,22 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	struct hash_iterator i;
 
+	if (hash_empty (&spt->hash_table)) {
+		return;
+	}
+
 	hash_first (&i, &spt->hash_table);
+
 	while (hash_next (&i)) {
 		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
 		
+		if (page == NULL) {
+			printf ("PAGE NULL\n\n");
+			return;
+		}
+
 		hash_delete (&spt->hash_table, &page->hash_elem);
 		destroy (page);
 	}
+	return;
 }
