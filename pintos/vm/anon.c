@@ -34,6 +34,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	};
 
 	struct anon_page *anon_page = &page->anon;
+	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -52,4 +53,6 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	// printf ("destroy\n\n");
+	return;
 }
