@@ -6,9 +6,7 @@ struct page;
 enum vm_type;
 
 struct anon_page {
-	enum vm_type type;
-	vm_initializer *init;
-	void *aux;
+	enum vm_type type; 
 	// bool (*page_initializer) (struct page *, enum vm_type, void *kva);
 };
 

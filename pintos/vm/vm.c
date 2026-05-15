@@ -229,12 +229,17 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			// 해당 되면 stack_growth한다.
 			// TODO: vm_stack_growth 실패할 경우 처리 방법
 			vm_stack_growth(addr);
-			return true;
+			if (spt_find_page(spt, addr)) {
+				return true;
+			} else {
+				return false;
+			}
 		} else {
 			return false;
 		}
+	} else {
+		return vm_do_claim_page (page);
 	}
-	return vm_do_claim_page (page);
 }
 
 /* Free the page.
