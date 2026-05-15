@@ -318,7 +318,6 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 
 	while (hash_next (&i)) {
     	struct page *source_page = hash_entry (hash_cur (&i), struct page, hash_elem);
-
 		enum vm_type type;
 		vm_initializer *init;
 		void *aux;
@@ -345,7 +344,10 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 			if (!vm_alloc_page (type, source_page->va, source_page->writable)) {
 				return false;
 			} else {
-				vm_claim_page (source_page->va);
+				if (!vm_claim_page (source_page->va) ||
+					!memcpy (spt_find_page(dst, source_page->va)->frame->kva, source_page->frame->kva, PGSIZE)) {
+					return false;
+					}
 			}
 		} else {
 			if (!vm_alloc_page_with_initializer (type, source_page->va, source_page->writable, init, aux)) {
