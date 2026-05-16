@@ -217,11 +217,11 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			return false;
 		}
 	} else {
-		// if (is_user_vaddr (addr) == false) {
-		// 	PANIC("Kernel VA fault");
-		// }
-		// 커널 영역에서 일어난 일이지만 유저 포인터에 접근하다가 생긴 fault는 anon page를 만들어서 넣어줌
 		// 커널 주소에 접근하면 kernel bug panic 처리함
+		if (is_user_vaddr (addr) == false) {
+		 	return false;
+		}
+		// 커널 영역에서 일어난 일이지만 유저 포인터에 접근하다가 생긴 fault는 anon page를 만들어서 넣어줌
 	}
 	// TODO: page 구조체에 owner
 	page = spt_find_page (spt, addr);
@@ -379,7 +379,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt) {
 
 	while (hash_next (&i)) {
 		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
-		
+
 		if (page == NULL) {
 			printf ("PAGE NULL\n\n");
 			return;
