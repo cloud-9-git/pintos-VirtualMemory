@@ -56,7 +56,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-	
+
 	struct page *spt_find_result_page = spt_find_page (spt, upage);	
 
 	/* Check wheter the upage is already occupied or not. */
@@ -73,10 +73,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		uninit_new (page, upage, init, type, aux, VM_TYPE(type) == VM_ANON ? anon_initializer : file_backed_initializer);
 		page->writable = writable;
-		
+	 
 		/* TODO: Insert the page into the spt. */
 		bool spt_insert_succeed = spt_insert_page(spt, page); 
-	
+
 		if (spt_insert_succeed) {			
 			return true; 
 		} else {
@@ -100,11 +100,12 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	/* TODO: Fill this function. */
 	struct hash_elem *e;
 	struct thread *curr_process = thread_current (); 
-
+	
 	// # TODO: hash_find() 사용하도록 변경하기
 	struct page dummy; 
 
 	dummy.va = pg_round_down (va);
+
 	e = hash_find (&spt->hash_table, &dummy.hash_elem);
 
 	if (e != NULL) {
@@ -119,6 +120,8 @@ bool
 spt_insert_page(struct supplemental_page_table *spt, struct page *page)
 {
     struct hash_elem *e;
+	
+	page->va = pg_round_down(page->va); 	
 
 	e = hash_insert(&spt->hash_table, &page->hash_elem);
 
@@ -178,7 +181,7 @@ static void
 vm_stack_growth (void *addr) {
 	// TODO: 실패시 처리 return으로 충분한지, swap out같은걸 해야 하는지
 	bool stack_page_alloc_success = vm_alloc_page (VM_ANON | VM_MARKER_0, addr, true);
-	if (stack_page_alloc_success == false) {
+	if (stack_page_alloc_success == false) {	
 		return;
 	}
 
@@ -186,6 +189,7 @@ vm_stack_growth (void *addr) {
 	if (page_claim_success == false) {
 		return;
 	}
+	
 }
 
 /* Handle the fault on write_protected page */
@@ -256,9 +260,10 @@ bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
 	struct thread *curr_process = thread_current(); 
+	
 	/* TODO: Fill this function */
 	page = spt_find_page(&curr_process->spt, va); 
-
+	
 	if (page == NULL) {
 		return false; 
 	}
