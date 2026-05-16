@@ -20,6 +20,7 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "intrinsic.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -73,6 +74,7 @@ process_init (void) {
  * 이 함수는 반드시 한 번만 호출해야 한다. */
 tid_t
 process_create_initd (const char *file_name) {
+	
 	char *fn_copy;
 	tid_t tid;
 	struct thread *cur = thread_current ();
@@ -296,7 +298,6 @@ __do_fork (void *aux_) {
 	if (current->pml4 == NULL) {
 		goto error;
 	}
-
 	process_activate(current);
 
 #ifdef VM
@@ -356,6 +357,17 @@ process_exec (void *f_name) {
 	uint64_t *old_pml4 = current->pml4;
 	struct file *old_exec_file = current->exec_file;
 
+	/*  # 이지섭 (26/05/16):
+		NOTE: supplemental_page_table_copy()를 사용하지 않는 이유: malloc 정보가 동일해야 하기 때문. copy()를 쓰는 경우는 malloc 정보가 달라야 하기 때문.
+		exec: 기존에 실행되던 프로그램의 컨텍스트를 새롭게 실행할 프로그램의 컨텍스트로 변경한다.
+		원래 의도: SPT를 새롭게 초기화 해줘야 한다.
+		조건: load 이전에 SPT를 새롭게 초기화 해야 한다.
+
+		load 성공하는 경우: 기존의 SPT를 정리한다. -> kill (&old_spt);
+		load 실패하는 경우: 기존의 SPT를 사용하고 새롭게 만든 SPT를 정리한다. -> kill (&current->spt); current->spt = old_spt; 
+	*/
+
+	struct supplemental_page_table old_spt = current->spt;
 
 	/* thread 구조체 안의 intr_frame은 사용할 수 없다.
 	 * 현재 스레드가 다시 스케줄될 때 해당 멤버에 실행 정보가 저장되기
@@ -364,6 +376,8 @@ process_exec (void *f_name) {
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
+
+	supplemental_page_table_init (&thread_current ()->spt);
 
 	/* 
 	 * 문맥 정리 후 적재하면 load 실패 시 데이터 손실 발생
@@ -377,12 +391,15 @@ process_exec (void *f_name) {
 
 	/* 그다음 바이너리를 적재한다. */
 	success = load (file_name, &_if);
+
 	palloc_free_page (file_name);
 
 	/* 적재에 실패하면 종료한다. */
 	if (!success) {
 		uint64_t *new_pml4 = current->pml4;
 		current->pml4 = old_pml4;
+		supplemental_page_table_kill (&current->spt);	// # 새로 만들었던 SPT 해제
+		current->spt = old_spt;							// # 원래 SPT로 복구
 
 		process_activate(current);
 
@@ -402,6 +419,9 @@ process_exec (void *f_name) {
 		pml4_destroy(old_pml4);
 	}
 
+	// # 성공하는 경우
+	supplemental_page_table_kill (&old_spt);
+	
 	/* 전환된 프로세스를 시작한다. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -636,7 +656,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
- 
+
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -649,6 +669,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 	strlcpy(file_name_copy, file_name, PGSIZE);
+
 	/* NULL까지 반복하여 argv 만들기 */
 	char *argv[64];
 	char *save_ptr;
@@ -662,6 +683,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		argc++;
 		token = strtok_r(NULL, " ", &save_ptr);
 	}
+	
 	argv[argc] = NULL; // 배열의 마지막 값은 NULL로 설정
 
 	/* 페이지 디렉터리를 할당하고 활성화한다. */
@@ -719,7 +741,7 @@ load (const char *file_name, struct intr_frame *if_) {
 				if (validate_segment (&phdr, file)) {
 					bool writable = (phdr.p_flags & PF_W) != 0;
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
-					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
+					uint64_t mem_page = phdr.p_vaddr & ~PGMASK; // VA를 round_down해준다
 					uint64_t page_offset = phdr.p_vaddr & PGMASK;
 					uint32_t read_bytes, zero_bytes;
 					if (phdr.p_filesz > 0) {
@@ -734,11 +756,11 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
-
 					if (!load_segment (file, file_page, (void *) mem_page,
-								read_bytes, zero_bytes, writable)) {						
+								read_bytes, zero_bytes, writable)) {
 						goto done;
 					} 
+		
 				}
 				else
 					goto done;
@@ -882,13 +904,11 @@ static bool install_page (void *upage, void *kpage, bool writable);
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 
 	ASSERT (pg_ofs (upage) == 0);
 
 	ASSERT (ofs % PGSIZE == 0);
-
 
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
@@ -963,12 +983,13 @@ install_page (void *upage, void *kpage, bool writable) {
 /* 여기부터의 코드는 project 3 이후에 사용된다.
  * project 2만 대상으로 구현하려면 위쪽 블록에 구현하라. */
 
-struct aux {
-	struct file *file;
-	size_t page_read_bytes;
-	size_t page_zero_bytes;
-	bool writable;
-};
+// struct aux {
+// 	struct file *file;
+// 	size_t page_read_bytes;
+// 	size_t page_zero_bytes;
+// 	off_t offset;
+// 	bool writable;
+// };
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
@@ -977,7 +998,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
 
 	struct aux *aux_ = (struct aux *) aux;
-	if (file_read (aux_->file, page->frame->kva, aux_->page_read_bytes) != (int) aux_->page_read_bytes) {
+	if (file_read_at (aux_->file, page->frame->kva, aux_->page_read_bytes, aux_->offset) != (int) aux_->page_read_bytes) {
 			palloc_free_page (page->frame->kva);
 			return false;
 	}
@@ -1006,7 +1027,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
@@ -1017,24 +1037,30 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;
 		struct aux *aux_ = malloc(sizeof(struct aux));
+
+		if (aux_ == NULL) {
+			// TODO: heap영역도 부족하면 swap out 해야하나?
+			return false;
+		}
 		aux_->file = file;
 		aux_->page_read_bytes = page_read_bytes;
 		aux_->page_zero_bytes = page_zero_bytes;
+		aux_->offset = ofs;
 		aux_->writable = writable;
 
 		aux = aux_;
-
+	
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux)) {
-
+					writable, lazy_load_segment, aux)) {	
+	
 			free(aux_);
 			return false;			
 		}
 
-
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
+		ofs += PGSIZE;
 		upage += PGSIZE;
 	}
 	return true;
@@ -1050,6 +1076,24 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: 성공하면 rsp를 그에 맞게 설정한다.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다. */
 	/* TODO: 여기에 코드를 작성한다. */
+	// # 물리 페이지 할당하고 stack 타입으로 매핑
+	struct thread * curr_process = thread_current ();
+
+	 // # 할당할 수 있는 frame이 없는 경우
+	// # TODO: kva == NULL인 경우와 pml4_set_page()의 결과가 false인 경우의 처리 고민하기
+	// # TODO: free () 혹은 destroy () 처리 고민하기
+	bool alloc_success = vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true);
+	if (alloc_success) {
+		bool claim_page_success = vm_claim_page (stack_bottom);
+		if (claim_page_success) {	// 모두 성공한 경우
+			if_->rsp = USER_STACK;
+			success = true;
+		} else {	// malloc은 성공하고 claim은 실패한 경우
+			struct page *first_stack_page_marshmallow = spt_find_page (&curr_process->spt, stack_bottom);
+			spt_remove_page (&curr_process->spt, first_stack_page_marshmallow);
+		}
+	}
+	// else: vm_alloc_page()가 실패한 경우에는 아무것도 해주지 않아도 됨
 
 	return success;
 }

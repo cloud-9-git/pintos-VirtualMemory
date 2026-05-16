@@ -115,18 +115,21 @@ page_fault (struct intr_frame *f) {
 	/* 폴트를 일으킨 주소, 즉 접근하다가 오류가 난 가상 주소를 얻는다.
 	   이 값은 코드나 데이터를 가리킬 수 있다. 반드시 폴트를 일으킨
 	   명령어의 주소(f->rip)와 같지는 않다. */
-
 	fault_addr = (void *) rcr2();
 
 	/* 인터럽트를 다시 켠다. 인터럽트를 껐던 이유는 CR2가 바뀌기 전에
 	   확실히 읽기 위해서뿐이었다. */
 	intr_enable ();
 
-
 	/* 원인을 판별한다. */
 	not_present = (f->error_code & PF_P) == 0;
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
+
+	// TODO: 이게 뭔지 체크해버려
+	if (user) {
+		thread_current ()->user_rsp = f->rsp;
+	}
 
 #ifdef VM
 	/* project 3 이후에서 사용한다. */

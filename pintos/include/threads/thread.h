@@ -133,6 +133,7 @@ struct  thread {
 
 	/* `thread.c`가 관리한다. */
 	struct intr_frame tf;               /* 문맥 전환용 정보. */
+	uint64_t user_rsp;
 	unsigned magic;                     /* 스택 오버플로를 감지한다. */
 };
 
