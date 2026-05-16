@@ -313,6 +313,17 @@ page_less (const struct hash_elem *a_,
 	return a->va < b->va;
 }
 
+static void 
+page_hash_brown_destructor (struct hash_elem *e, void *aux UNUSED) {
+	struct page *page = hash_entry (e, struct page, hash_elem);
+	if (page == NULL) {
+		printf ("PAGE NULL\n\n");
+		return;
+	}
+	destroy (page);
+	free (page);
+}
+
 /* Copy supplemental page table from src to dst */
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst,
@@ -376,17 +387,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	}
 
 	hash_first (&i, &spt->hash_table);
-
-	while (hash_next (&i)) {
-		struct page *page = hash_entry (hash_cur (&i), struct page, hash_elem);
-
-		if (page == NULL) {
-			printf ("PAGE NULL\n\n");
-			return;
-		}
-
-		hash_delete (&spt->hash_table, &page->hash_elem);
-		destroy (page);
-	}
+	hash_destroy(&spt->hash_table, page_hash_brown_destructor);
+	
 	return;
 }
