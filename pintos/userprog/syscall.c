@@ -176,6 +176,7 @@ syscall_handler (struct intr_frame *f) {
 		/* read(fd, buffer, size)의 인자는 syscall_entry가 저장한 레지스터에서
 		 * 꺼낸다. rdi는 fd, rsi는 사용자 버퍼 주소, rdx는 읽을 바이트 수다.
 		 * 시스템 콜 반환값도 rax로 돌아가므로 read() 결과를 f->R.rax에 저장한다. */
+		
 		int fd = (int) f->R.rdi;
 		void *buffer = (void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
@@ -185,7 +186,7 @@ syscall_handler (struct intr_frame *f) {
 			f->R.rax = 0;
 			break;
 		}
-
+	
 		/* 실제 read를 수행 */
 		if (fd == 0) { // stdin이면 input_getc로 buffer에 size만큼 쓰기
 			validate_user_buffer(buffer, size);
@@ -195,15 +196,24 @@ syscall_handler (struct intr_frame *f) {
 			}
 			f->R.rax = size;
 		} else if (fd >= 2) {
+			// TODO: 추후에 다시 돌아와서 왜 권한 fault가 나지 않는지 확인하기 
+			struct thread *curr_process = thread_current();
+			struct page* curr_page = spt_find_page(&curr_process->spt, buffer); 
+			if (!curr_page->writable) {
+				kill_process_due_to_bad_user_memory();
+			}
+
 			struct fd_entry *entry = find_fd_entry(fd); // file이면 fd로 entry를 찾는다
 			if (entry == NULL || entry->file == NULL) {
 				f->R.rax = -1;
 				break;
-			}
+			}					
 			validate_user_buffer(buffer, size);
+
 			lock_acquire(&filesys_lock); // file이면 filesys lock 획득 후 file_read
 			f->R.rax = file_read(entry->file, buffer, size);
 			lock_release(&filesys_lock); // file이면 filesys lock 해제
+	
 		} else {
 			f->R.rax = -1;
 		}
