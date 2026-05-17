@@ -7,7 +7,10 @@ struct page;
 enum vm_type;
 
 struct file_page {
-	enum vm_type type;
+	int writable; 
+	off_t offset; 	
+	size_t page_read_bytes;
+	struct file *file; 
 };
 
 struct file_aux {

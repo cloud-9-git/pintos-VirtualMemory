@@ -25,20 +25,32 @@ vm_file_init (void) {
 
 /* Initialize the file backed page */
 bool
-file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
+file_backed_initializer (struct page *page, enum vm_type type, void *kva) {	
 	/* Set up the handler */
 	page->operations = &file_ops;
+
+	struct file_aux *aux_ = page->uninit.aux; 
+
 	page->file = (struct file_page) {
-		.type = type,
+		.writable = aux_->writable, 
+		.page_read_bytes = aux_->page_read_bytes, 
+		.offset = aux_->offset,
+		.file = aux_->file 
 	};
 
-	struct file_page *file_page = &page->file;
+	// return uninit->page_initializer (page, uninit->type, kva) &&
+	// (init ? init (page, aux) : true);
+	
+	// TODO: 이 코드 왜 있는지 찾아보고 false인 경우가 언제인지 찾아보기 
+	// struct file_page *file_page = &page->file;
+	return true; 
 }
 
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+	return true; 
 }
 
 /* Swap out the page by writeback contents to the file. */
@@ -56,9 +68,10 @@ file_backed_destroy (struct page *page) {
 static bool
 lazy_load_file (struct page *page, void *aux) {
 	struct file_aux *aux_ = (struct file_aux *) aux;
-	if (file_read_at (aux_->file, page->frame->kva, aux_->page_read_bytes, aux_->offset) != (int) aux_->page_read_bytes) {
-			palloc_free_page (page->frame->kva);
-			return false;
+
+	if (file_read_at (aux_->file, page->frame->kva, aux_->page_read_bytes, aux_->offset) != (int) aux_->page_read_bytes) {		
+		palloc_free_page (page->frame->kva);		
+		return false;
 	}
 	memset (page->frame->kva + aux_->page_read_bytes, 0, aux_->page_zero_bytes);
 	return true;
@@ -76,7 +89,7 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
+	
 		void *aux = NULL;
 		struct file_aux *aux_ = malloc(sizeof(struct file_aux));
 
@@ -92,10 +105,10 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 
 		aux = aux_;
 	
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
+		if (!vm_alloc_page_with_initializer (VM_FILE, upage,
 					writable, lazy_load_file, aux)) {	
 	
-			free(aux_);
+			free(aux_);		
 			return false;			
 		}
 
@@ -105,6 +118,7 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 		ofs += PGSIZE;
 		upage += PGSIZE;
 	}
+
 	return true;
 }
 
@@ -120,7 +134,7 @@ do_mmap (void *addr, size_t length, int writable,
 		성공하면 이 함수는 파일이 매핑된 가상 주소를 반환합니다.
 		실패하면 파일 매핑에 유효한 주소가 아닌 NULL을 반환해야 합니다.
 	*/
-
+	
 	/* # validation */
 	// # 읽을 크기가 0 이하이면 실패
 	if (length <= 0) {
@@ -131,19 +145,27 @@ do_mmap (void *addr, size_t length, int writable,
 		return NULL;
 	}
 
+	if (file == NULL) {
+		return NULL; 
+	}
+
 	// # TODO: fd에서 열린 파일의 크기가 0이면 실패
 	if (file_length (file) <= 0) {
 		return NULL;
 	}
-
+	
 	/* # mapping */
 	// # TODO: SPT에 넣기
-	load_file (file, offset, addr, length, 0, writable);
+	// size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+	size_t file_size = length < file_length(file) ? length : file_length(file); 
 
-	return NULL;
+	load_file (file, offset, addr, file_size, 0, writable);
+
+	return addr;
 }
 
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+
 }
