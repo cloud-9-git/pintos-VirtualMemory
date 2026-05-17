@@ -31,6 +31,8 @@ static void validate_user_buffer(const void *buffer, size_t size);
 static void validate_user_string(const char *str);
 static void kill_process_due_to_bad_user_memory(void);
 
+static int sys_open (const char *file);
+
 /* 시스템 호출.
  *
  * 예전에는 시스템 호출 서비스를 인터럽트 핸들러가 처리했다
@@ -76,6 +78,28 @@ find_fd_entry(int fd) {
 	return NULL;
 }
 
+static int
+sys_open (const char *file) {
+	struct thread *t = thread_current();
+
+	validate_user_string(file);
+	lock_acquire(&filesys_lock);
+	struct file *opened = filesys_open(file);
+	lock_release(&filesys_lock);
+	if (opened == NULL) {
+		return -1;
+	}
+	struct fd_entry *entry = malloc(sizeof *entry);
+	if (entry == NULL) {
+		file_close(opened);
+		return -1;
+	}
+	entry->fd = t->next_fd;
+	entry->file = opened;
+	t->next_fd++;
+	list_push_back(&t->fd_list, &entry->elem);
+	return entry->fd;
+}
 
 /* 메인 시스템 호출 인터페이스 */
 void
@@ -106,27 +130,8 @@ syscall_handler (struct intr_frame *f) {
 
 	case SYS_OPEN: {
 		const char *file = (const char *) f->R.rdi;
-		validate_user_string(file);
-		lock_acquire(&filesys_lock);
-		struct file *opened = filesys_open(file);
-		lock_release(&filesys_lock);
-		if (opened == NULL) {
-			f->R.rax = -1;
-			break;
-		}
-		struct fd_entry *entry = malloc(sizeof *entry);
-		if (entry == NULL) {
-			file_close(opened);
-			f->R.rax = -1;
-			break;
-		}
-		entry->fd = t->next_fd;
-		entry->file = opened;
-		t->next_fd ++;
-		list_push_back(&t->fd_list, &entry->elem);
-		f->R.rax = entry->fd;
+		f->R.rax = sys_open (file);
 		break;
-
 	}
 
 	case SYS_FILESIZE: {
@@ -307,6 +312,21 @@ syscall_handler (struct intr_frame *f) {
 			thread_exit();
 		}
 		f->R.rax = ret;
+		break;
+	}
+
+	case SYS_MMAP: {
+		// printf ("enter the SYS_MMAP\n\n");
+		void *addr = (void *) f->R.rdi;
+		size_t length = (size_t) f->R.rsi;
+		int writable = (int) f->R.rdx;
+		int fd = (int) f->R.r10;
+		off_t offset = (off_t) f->R.r8;
+
+		// printf ("find_fd_entry [before]\n\n");
+		struct fd_entry *file_entry = find_fd_entry (fd);
+		// printf ("find_fd_entry [before]\n\n");
+		f->R.rax = do_mmap (addr, length, writable, file_entry->file, offset);
 		break;
 	}
 	
