@@ -200,11 +200,12 @@ syscall_handler (struct intr_frame *f) {
 				buf[i] = input_getc();
 			}
 			f->R.rax = size;
-		} else if (fd >= 2) {
+		} else if (fd >= 2) {	
 			// TODO: 추후에 다시 돌아와서 왜 권한 fault가 나지 않는지 확인하기 
 			struct thread *curr_process = thread_current();
 			struct page* curr_page = spt_find_page(&curr_process->spt, buffer); 
-			if (!curr_page->writable) {
+		
+			if (curr_page && !curr_page->writable) {
 				kill_process_due_to_bad_user_memory();
 			}
 
