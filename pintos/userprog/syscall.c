@@ -415,22 +415,57 @@ validate_user_string(const char *str) {
 
 bool 
 validate_mmap_area(const void *va, size_t length) {
+	if (va <= 0 || length <= 0) {
+		return false;
+	}
+
 	if (!is_user_vaddr(va)) {
-		return false; 
+		return false;
 	}
 
-	if (va >= (USER_STACK - STACK_MAX_SIZE)) {
-		return false; 
+	if (va != pg_round_down(va)) {
+			return false;
 	}
 
-	struct page *start_page = spt_find_page(&thread_current ()->spt, va); 
-	struct page *end_page = spt_find_page(&thread_current ()->spt, pg_round_down(va + length - 1));
+	/* 나중의 이해를 돕기 위해 남겨 놓은 주석 */
+	/* # va로부터 length만큼을 덮어썼을 때 USER_STACK을 초과해서는 안 된다 */
+	// if (length <= USER_STACK) {
+	// 	if (((size_t) va + length) > USER_STACK) {
+	// 		return false;
+	// 	}
+	// 	return false;
+	// }
 
-	// segment 영역 검사 
-	if (start_page && start_page->operations->type != VM_FILE || end_page && end_page->operations->type != VM_FILE) {
-		return false; 
+	/* # 성능 개선을 위해서 length가 비정상적으로 큰 경우는 early return */
+	if (length >= USER_STACK) {
+		return false;
 	}
-	return true; 
+
+	// # Stack 영역 충돌 확인: 파일을 할당한 마지막 페이지의 끝 주소가 Stack 영역의 끝부분과 overlap되지 않는지 확인한다.
+	// if (pg_round_up(va + length - 1) > (USER_STACK - STACK_MAX_SIZE)) {
+	// 	return false;
+	// }
+
+	// # curr_va는 위에서의 예외를 통과했기에 정렬된 주소(페이지의 시작 주소)임이 보장되어 있다
+	void *curr_va = va;
+	while (length > 0) {
+		if (curr_va >= USER_STACK) {
+			return false; 
+		}
+
+		if (spt_find_page (&thread_current ()->spt, curr_va)) {
+			return false;
+		}
+
+		length -= PGSIZE;
+		curr_va += PGSIZE;
+	}
+
+	if (curr_va >= USER_STACK) {
+		return false;
+	}
+ 
+	return true;
 }
 
 static void

@@ -107,8 +107,7 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 		aux = aux_;
 	
 		if (!vm_alloc_page_with_initializer (VM_FILE, upage,
-					writable, lazy_load_file, aux)) {	
-	
+					writable, lazy_load_file, aux)) {
 			free(aux_);		
 			return false;			
 		}
@@ -150,15 +149,11 @@ do_mmap (void *addr, size_t length, int writable,
 		return NULL; 
 	}
 
-	if (addr != pg_round_down(addr)) {
-		return NULL; 
-	}
-
-	// # TODO: fd에서 열린 파일의 크기가 0이면 실패
 	if (file_length (file) <= 0) {
 		return NULL;
 	}
 
+	// # Page 주소 aligned 검사도 수행
 	if (!validate_mmap_area(addr, length)) {
 		return NULL; 
 	} 
@@ -176,16 +171,15 @@ do_mmap (void *addr, size_t length, int writable,
 /* Do the munmap */
 void
 do_munmap (void *addr) {
-	struct thread *curr_process = thread_current(); 
-	struct page *page = spt_find_page(&curr_process->spt, addr); 
+	struct thread *curr_process = thread_current();
+	struct page *page = spt_find_page(&curr_process->spt, addr);
 	if (page == NULL) {
 		return;
 	}
 
 	if (pml4_is_dirty(&curr_process->spt, page->va)) {
-		file_write_at(page->file.file, addr, page->file.page_read_bytes, page->file.offset); 
-		pml4_set_dirty(&curr_process->spt, page->va, 0); 
+		file_write_at(page->file.file, addr, page->file.page_read_bytes, page->file.offset);
+		pml4_set_dirty(&curr_process->spt, page->va, 0);
 	}
 
-	
 }
