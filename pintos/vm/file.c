@@ -3,7 +3,7 @@
 #include "vm/vm.h"
 #include "filesys/file.h"
 #include "userprog/syscall.h"
-
+#include "threads/mmu.h"
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
@@ -176,5 +176,16 @@ do_mmap (void *addr, size_t length, int writable,
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+	struct thread *curr_process = thread_current(); 
+	struct page *page = spt_find_page(&curr_process->spt, addr); 
+	if (page == NULL) {
+		return;
+	}
+
+	if (pml4_is_dirty(&curr_process->spt, page->va)) {
+		file_write_at(page->file.file, addr, page->file.page_read_bytes, page->file.offset); 
+		pml4_set_dirty(&curr_process->spt, page->va, 0); 
+	}
+
 	
 }
