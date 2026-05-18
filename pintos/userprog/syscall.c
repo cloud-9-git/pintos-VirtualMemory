@@ -31,7 +31,9 @@ static void validate_user_buffer(const void *buffer, size_t size);
 static void validate_user_string(const char *str);
 static void kill_process_due_to_bad_user_memory(void);
 
+
 static int sys_open (const char *file);
+
 
 /* 시스템 호출.
  *
@@ -147,9 +149,11 @@ syscall_handler (struct intr_frame *f) {
 		break;
 	}
 
-	case SYS_WRITE: {
+	case SYS_WRITE: {	
 		int fd = (int) f->R.rdi;
+		
 		const void *buffer = (const void *) f->R.rsi;
+
 		size_t size = (size_t) f->R.rdx;
 
 		if (size == 0) {
@@ -317,20 +321,24 @@ syscall_handler (struct intr_frame *f) {
 	}
 
 	case SYS_MMAP: {
-		// printf ("enter the SYS_MMAP\n\n");
-		void *addr = (void *) f->R.rdi;
+		void *addr = (void *) f->R.rdi;	
 		size_t length = (size_t) f->R.rsi;
 		int writable = (int) f->R.rdx;
 		int fd = (int) f->R.r10;
 		off_t offset = (off_t) f->R.r8;
-
-		// printf ("find_fd_entry [before]\n\n");
+				
 		struct fd_entry *file_entry = find_fd_entry (fd);
-		// printf ("find_fd_entry [before]\n\n");
+
 		f->R.rax = do_mmap (addr, length, writable, file_entry->file, offset);
 		break;
 	}
 	
+	case SYS_MUNMAP: {
+		// struct fd_entry *file_entry = find_fd_entry (fd); 
+    	do_munmap((void *) f->R.rdi);
+    	break;
+	}
+
 	default:
 		break;
 	}
@@ -367,8 +375,15 @@ validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
 
 	//pml4_get_page(cur->pml4, ptr) 는 VM에서는 기준이 될 수 없다: lazy load나 stack growth로 인해 pml4에는 아직 매핑되지 않은 페이지가 많기 떄문이다
-	if (ptr == NULL || !is_user_vaddr(ptr) ||
-			((spt_find_page(&cur->spt, ptr) == NULL) && !(is_user_vaddr(ptr) && ((cur->user_rsp) - 8 <= ptr) && (ptr < USER_STACK) && (ptr >= (USER_STACK - STACK_MAX_SIZE))))) {
+	if (ptr == NULL) {
+		kill_process_due_to_bad_user_memory();
+	}
+	
+	if (!is_user_vaddr(ptr)) {
+		kill_process_due_to_bad_user_memory();
+	}
+
+	if (((spt_find_page(&cur->spt, ptr) == NULL) && !(is_user_vaddr(ptr) && ((cur->user_rsp) - 8 <= ptr) && (ptr < USER_STACK) && (ptr >= (USER_STACK - STACK_MAX_SIZE))))) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
@@ -396,6 +411,26 @@ validate_user_string(const char *str) {
 		}
 		p++;
 	}
+}
+
+bool 
+validate_mmap_area(const void *va, size_t length) {
+	if (!is_user_vaddr(va)) {
+		return false; 
+	}
+
+	if (va >= (USER_STACK - STACK_MAX_SIZE)) {
+		return false; 
+	}
+
+	struct page *start_page = spt_find_page(&thread_current ()->spt, va); 
+	struct page *end_page = spt_find_page(&thread_current ()->spt, pg_round_down(va + length - 1));
+
+	// segment 영역 검사 
+	if (start_page && start_page->operations->type != VM_FILE || end_page && end_page->operations->type != VM_FILE) {
+		return false; 
+	}
+	return true; 
 }
 
 static void

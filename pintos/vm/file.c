@@ -2,6 +2,7 @@
 
 #include "vm/vm.h"
 #include "filesys/file.h"
+#include "userprog/syscall.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -145,11 +146,11 @@ do_mmap (void *addr, size_t length, int writable,
 		return NULL;
 	}
 
-	if (addr != pg_round_down(addr)) {
+	if (file == NULL) {
 		return NULL; 
 	}
 
-	if (file == NULL) {
+	if (addr != pg_round_down(addr)) {
 		return NULL; 
 	}
 
@@ -157,6 +158,10 @@ do_mmap (void *addr, size_t length, int writable,
 	if (file_length (file) <= 0) {
 		return NULL;
 	}
+
+	if (!validate_mmap_area(addr, length)) {
+		return NULL; 
+	} 
 	
 	/* # mapping */
 	// # TODO: SPT에 넣기
