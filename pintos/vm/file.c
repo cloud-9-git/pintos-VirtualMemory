@@ -74,7 +74,7 @@ lazy_load_file (struct page *page, void *aux) {
 		return false;
 	}
 	memset (page->frame->kva + aux_->page_read_bytes, 0, aux_->page_zero_bytes);
-	return true;
+	return true; 
 }
 
 static bool
@@ -134,7 +134,7 @@ do_mmap (void *addr, size_t length, int writable,
 		성공하면 이 함수는 파일이 매핑된 가상 주소를 반환합니다.
 		실패하면 파일 매핑에 유효한 주소가 아닌 NULL을 반환해야 합니다.
 	*/
-	
+
 	/* # validation */
 	// # 읽을 크기가 0 이하이면 실패
 	if (length <= 0) {
@@ -143,6 +143,10 @@ do_mmap (void *addr, size_t length, int writable,
 
 	if (addr == 0) {
 		return NULL;
+	}
+
+	if (addr != pg_round_down(addr)) {
+		return NULL; 
 	}
 
 	if (file == NULL) {
@@ -167,5 +171,5 @@ do_mmap (void *addr, size_t length, int writable,
 /* Do the munmap */
 void
 do_munmap (void *addr) {
-
+	
 }
