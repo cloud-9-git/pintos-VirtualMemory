@@ -367,8 +367,15 @@ validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
 
 	//pml4_get_page(cur->pml4, ptr) 는 VM에서는 기준이 될 수 없다: lazy load나 stack growth로 인해 pml4에는 아직 매핑되지 않은 페이지가 많기 떄문이다
-	if (ptr == NULL || !is_user_vaddr(ptr) ||
-			((spt_find_page(&cur->spt, ptr) == NULL) && !(is_user_vaddr(ptr) && ((cur->user_rsp) - 8 <= ptr) && (ptr < USER_STACK) && (ptr >= (USER_STACK - STACK_MAX_SIZE))))) {
+	if (ptr == NULL) {
+		kill_process_due_to_bad_user_memory();
+	}
+	
+	if (!is_user_vaddr(ptr)) {
+		kill_process_due_to_bad_user_memory();
+	}
+
+	if (((spt_find_page(&cur->spt, ptr) == NULL) && !(is_user_vaddr(ptr) && ((cur->user_rsp) - 8 <= ptr) && (ptr < USER_STACK) && (ptr >= (USER_STACK - STACK_MAX_SIZE))))) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
