@@ -59,14 +59,17 @@ file_backed_swap_in (struct page *page, void *kva) {
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	return true; 
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
-	do_munmap(page);
-	free(page->file.file);
+
+	// do_munmap(page);
+	// printf("after do munmap\n\n"); 
+	// free(page->file.file);
 }
 
 static bool
@@ -78,7 +81,9 @@ lazy_load_file (struct page *page, void *aux) {
 		free(aux);	
 		return false;
 	}
+
 	memset (page->frame->kva + aux_->page_read_bytes, 0, aux_->page_zero_bytes);
+
 	free(aux);
 	return true; 
 }
@@ -99,10 +104,10 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 	
 		void *aux = NULL;
 		struct file_aux *aux_ = malloc(sizeof(struct file_aux));
-		aux_->file = file;
+		aux_->file = file_reopen(file);
 		aux_->writable = writable;
 		aux_->start_va = upage;
-
+		
 		if (aux_ == NULL) {
 			// TODO: heap영역도 부족하면 swap out 해야하나?
 			return false;
@@ -113,7 +118,7 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 		aux_->offset = ofs;
 		
 		aux = aux_;
-	
+		
 		if (!vm_alloc_page_with_initializer (VM_FILE, upage,
 					writable, lazy_load_file, aux)) {
 			free(aux_);		
@@ -134,6 +139,7 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
+	
 	/*
 		length bytes를 fd로 열린 파일에서 offset byte부터 프로세스(process)의 가상 주소 공간 addr에 매핑합니다.
 		전체 파일은 addr에서 시작하는 연속적인 가상 페이지에 매핑됩니다.
@@ -162,7 +168,7 @@ do_mmap (void *addr, size_t length, int writable,
 	}
 
 	// # Page 주소 aligned 검사도 수행
-	if (!validate_mmap_area(addr, length)) {
+	if (!validate_mmap_area(addr, length)) {		
 		return NULL; 
 	} 
 	
@@ -170,6 +176,7 @@ do_mmap (void *addr, size_t length, int writable,
 	// # TODO: SPT에 넣기
 	// size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 	size_t file_size = length < file_length(file) ? length : file_length(file); 
+	
 	if (!load_file (file, offset, addr, file_size, 0, writable)) {
 		return NULL;
 	}
@@ -179,6 +186,7 @@ do_mmap (void *addr, size_t length, int writable,
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+	printf("aa\n\n");
 	struct thread *curr_process = thread_current();
 	struct page *page = spt_find_page(&curr_process->spt, addr);
 
@@ -190,6 +198,7 @@ do_munmap (void *addr) {
 		return;
 	}
 
+
 	void *start_va = page->file.start_va;
 	off_t file_size = file_length(page->file.file);
 
@@ -198,18 +207,23 @@ do_munmap (void *addr) {
 	}
 
 	void *current_page_va = start_va;
+
 	while (current_page_va <= pg_round_down(start_va + file_size - 1)) {
-		if (pml4_is_dirty(&curr_process->spt, current_page_va)) {
-			page = spt_find_page(&curr_process->spt, current_page_va);
+	
+		page = spt_find_page(&curr_process->spt, current_page_va);			
+		
+		if (pml4_is_dirty(curr_process->pml4, current_page_va)) {		
+			file_write_at(page->file.file, current_page_va, page->file.page_read_bytes, page->file.offset);	
+			pml4_set_dirty(curr_process->pml4, current_page_va, 0);
+		}  
+		
+		pml4_clear_page(curr_process->pml4, current_page_va);	
 
-			// if (page == NULL) {
-			// 	return;
-			// }
-
-			file_write_at(page->file.file, current_page_va, page->file.page_read_bytes, page->file.offset);
-			pml4_set_dirty(&curr_process->spt, current_page_va, 0);
-		}
-		pml4_clear_page(&curr_process->pml4, current_page_va);
+		file_close(page->file.file); 
+		spt_remove_page(&curr_process->spt, page); 
+		
 		current_page_va = current_page_va + PGSIZE;
 	}
+
+
 }
