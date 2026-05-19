@@ -36,7 +36,8 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 		.writable = aux_->writable, 
 		.page_read_bytes = aux_->page_read_bytes, 
 		.offset = aux_->offset,
-		.file = aux_->file 
+		.file = aux_->file,
+		.start_va = aux_->start_va,
 	};
 
 	// return uninit->page_initializer (page, uninit->type, kva) &&
@@ -64,6 +65,8 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	do_munmap(page);
+	free(page->file.file);
 }
 
 static bool
@@ -84,6 +87,7 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 	// ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	// ASSERT (pg_ofs (upage) == 0);
 	// ASSERT (ofs % PGSIZE == 0);
+	
 	while (read_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
@@ -93,17 +97,19 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 	
 		void *aux = NULL;
 		struct file_aux *aux_ = malloc(sizeof(struct file_aux));
+		aux_->file = file;
+		aux_->writable = writable;
+		aux_->start_va = upage;
 
 		if (aux_ == NULL) {
 			// TODO: heap영역도 부족하면 swap out 해야하나?
 			return false;
 		}
-		aux_->file = file;
+		
 		aux_->page_read_bytes = page_read_bytes;
 		aux_->page_zero_bytes = page_zero_bytes;
 		aux_->offset = ofs;
-		aux_->writable = writable;
-
+		
 		aux = aux_;
 	
 		if (!vm_alloc_page_with_initializer (VM_FILE, upage,
@@ -117,8 +123,9 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 		zero_bytes -= page_zero_bytes;
 		ofs += PGSIZE;
 		upage += PGSIZE;
+		
+		free(aux_);
 	}
-
 	return true;
 }
 
@@ -173,13 +180,35 @@ void
 do_munmap (void *addr) {
 	struct thread *curr_process = thread_current();
 	struct page *page = spt_find_page(&curr_process->spt, addr);
+
 	if (page == NULL) {
 		return;
 	}
 
-	if (pml4_is_dirty(&curr_process->spt, page->va)) {
-		file_write_at(page->file.file, addr, page->file.page_read_bytes, page->file.offset);
-		pml4_set_dirty(&curr_process->spt, page->va, 0);
+	if (page->operations->type != VM_FILE) {
+		return;
 	}
 
+	void *start_va = page->file.start_va;
+	off_t file_size = file_length(page->file.file);
+
+	if (file_size == 0) {
+		return;
+	}
+
+	void *current_page_va = start_va;
+	while (current_page_va <= pg_round_down(start_va + file_size - 1)) {
+		if (pml4_is_dirty(&curr_process->spt, current_page_va)) {
+			page = spt_find_page(&curr_process->spt, current_page_va);
+
+			// if (page == NULL) {
+			// 	return;
+			// }
+
+			file_write_at(page->file.file, current_page_va, page->file.page_read_bytes, page->file.offset);
+			pml4_set_dirty(&curr_process->spt, current_page_va, 0);
+		}
+		pml4_clear_page(&curr_process->pml4, current_page_va);
+		current_page_va = current_page_va + PGSIZE;
+	}
 }

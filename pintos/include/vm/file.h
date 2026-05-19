@@ -11,6 +11,7 @@ struct file_page {
 	off_t offset; 	
 	size_t page_read_bytes;
 	struct file *file; 
+	void *start_va;
 };
 
 struct file_aux {
@@ -19,6 +20,7 @@ struct file_aux {
 	size_t page_zero_bytes;
 	off_t offset;
 	bool writable;
+	void *start_va;
 };
 
 void vm_file_init (void);
