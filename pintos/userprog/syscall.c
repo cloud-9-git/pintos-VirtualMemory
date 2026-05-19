@@ -447,13 +447,16 @@ validate_mmap_area(const void *va, size_t length) {
 	// }
 
 	// # curr_va는 위에서의 예외를 통과했기에 정렬된 주소(페이지의 시작 주소)임이 보장되어 있다
+	// # TODO: length가 size_t라서 음수가 되지 않고 언더 플로우가 발생하는 문제가 있음.
+	struct supplemental_page_table *curr_spt = &thread_current ()->spt;
 	void *curr_va = va;
-	while (length > 0) {
+
+	while (length >= PGSIZE) {
 		if (curr_va >= USER_STACK) {
 			return false; 
 		}
 
-		if (spt_find_page (&thread_current ()->spt, curr_va)) {
+		if (spt_find_page (curr_spt, curr_va)) {
 			return false;
 		}
 
@@ -461,10 +464,18 @@ validate_mmap_area(const void *va, size_t length) {
 		curr_va += PGSIZE;
 	}
 
+	if (length > 0 && length < PGSIZE) {
+		curr_va += PGSIZE;
+
+		if (spt_find_page (curr_spt, curr_va)) {
+			return false;
+		}
+	}
+
 	if (curr_va >= USER_STACK) {
 		return false;
 	}
- 
+
 	return true;
 }
 
