@@ -465,16 +465,16 @@ validate_mmap_area(const void *va, size_t length) {
 	}
 
 	if (length > 0 && length < PGSIZE) {
-		curr_va += PGSIZE;
+		if (curr_va + PGSIZE >= USER_STACK) {
+			return false;
+		}
 
 		if (spt_find_page (curr_spt, curr_va)) {
 			return false;
 		}
 	}
 
-	if (curr_va >= USER_STACK) {
-		return false;
-	}
+
 
 	return true;
 }

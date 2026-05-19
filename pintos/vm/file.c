@@ -74,10 +74,12 @@ lazy_load_file (struct page *page, void *aux) {
 	struct file_aux *aux_ = (struct file_aux *) aux;
 
 	if (file_read_at (aux_->file, page->frame->kva, aux_->page_read_bytes, aux_->offset) != (int) aux_->page_read_bytes) {		
-		palloc_free_page (page->frame->kva);		
+		palloc_free_page (page->frame->kva);	
+		free(aux);	
 		return false;
 	}
 	memset (page->frame->kva + aux_->page_read_bytes, 0, aux_->page_zero_bytes);
+	free(aux);
 	return true; 
 }
 
@@ -123,9 +125,8 @@ load_file (struct file *file, off_t ofs, uint8_t *upage,
 		zero_bytes -= page_zero_bytes;
 		ofs += PGSIZE;
 		upage += PGSIZE;
-		
-		free(aux_);
 	}
+	// aux는 lazy_load_file에서 free해준다. lazy_load_file에 쓰이기 때문이다.
 	return true;
 }
 
@@ -169,9 +170,9 @@ do_mmap (void *addr, size_t length, int writable,
 	// # TODO: SPT에 넣기
 	// size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 	size_t file_size = length < file_length(file) ? length : file_length(file); 
-
-	load_file (file, offset, addr, file_size, 0, writable);
-
+	if (!load_file (file, offset, addr, file_size, 0, writable)) {
+		return NULL;
+	}
 	return addr;
 }
 
