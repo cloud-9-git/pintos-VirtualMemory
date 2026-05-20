@@ -130,7 +130,16 @@ syscall_handler (struct intr_frame *f) {
 		break;
 	}
 
-	case SYS_OPEN: {
+	case SYS_REMOVE: {
+		const char *file = (const char *) f->R.rdi; 
+		lock_acquire(&filesys_lock); 
+		bool success = filesys_remove(file); 
+		lock_release(&filesys_lock); 
+		f->R.rax = success; 
+		break; 
+	}
+
+	case SYS_OPEN: {		
 		const char *file = (const char *) f->R.rdi;
 		f->R.rax = sys_open (file);
 		break;
@@ -151,7 +160,7 @@ syscall_handler (struct intr_frame *f) {
 
 	case SYS_WRITE: {	
 		int fd = (int) f->R.rdi;
-		
+
 		const void *buffer = (const void *) f->R.rsi;
 
 		size_t size = (size_t) f->R.rdx;
@@ -174,6 +183,7 @@ syscall_handler (struct intr_frame *f) {
 			validate_user_buffer(buffer, size);
 			lock_acquire(&filesys_lock);
 			f->R.rax = file_write(entry->file, buffer, size);
+
 			lock_release(&filesys_lock);
 		} else {
 			f->R.rax = -1;
@@ -189,7 +199,7 @@ syscall_handler (struct intr_frame *f) {
 		int fd = (int) f->R.rdi;
 		void *buffer = (void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
-		
+	
 		// size 검사
 		if (size == 0) {
 			f->R.rax = 0;
@@ -205,10 +215,11 @@ syscall_handler (struct intr_frame *f) {
 			}
 			f->R.rax = size;
 		} else if (fd >= 2) {	
+	
 			// TODO: 추후에 다시 돌아와서 왜 권한 fault가 나지 않는지 확인하기 
 			struct thread *curr_process = thread_current();
 			struct page* curr_page = spt_find_page(&curr_process->spt, buffer); 
-		
+
 			if (curr_page && !curr_page->writable) {
 				kill_process_due_to_bad_user_memory();
 			}
@@ -218,15 +229,17 @@ syscall_handler (struct intr_frame *f) {
 				f->R.rax = -1;
 				break;
 			}					
+	
 			validate_user_buffer(buffer, size);
 
 			lock_acquire(&filesys_lock); // file이면 filesys lock 획득 후 file_read
 			f->R.rax = file_read(entry->file, buffer, size);
 			lock_release(&filesys_lock); // file이면 filesys lock 해제
-	
+			
 		} else {
 			f->R.rax = -1;
 		}
+
 		break;
 	}
 
@@ -246,6 +259,7 @@ syscall_handler (struct intr_frame *f) {
 	}
 
 	case SYS_CLOSE: {
+	
 		int fd = (int) f->R.rdi;
 		struct list_elem *e;
 		for (e = list_begin(&t->fd_list);
@@ -261,6 +275,7 @@ syscall_handler (struct intr_frame *f) {
 				break;
 			}
  		}
+	
 		break;
 	}
 	
@@ -269,6 +284,7 @@ syscall_handler (struct intr_frame *f) {
 	}
 	
 	case SYS_FORK: {
+
 		const char *thread_name = (const char *) f->R.rdi;
 		char *kbuf;
 		
@@ -326,10 +342,20 @@ syscall_handler (struct intr_frame *f) {
 		int writable = (int) f->R.rdx;
 		int fd = (int) f->R.r10;
 		off_t offset = (off_t) f->R.r8;
-				
+
+		if (offset > length) {
+			f->R.rax = NULL; 
+			break;
+		}
+		
 		struct fd_entry *file_entry = find_fd_entry (fd);
+		
+		if (file_entry == NULL) {
+			kill_process_due_to_bad_user_memory(); 
+		}
 
 		f->R.rax = do_mmap (addr, length, writable, file_entry->file, offset);
+	
 		break;
 	}
 	
@@ -424,7 +450,7 @@ validate_mmap_area(const void *va, size_t length) {
 	}
 
 	if (va != pg_round_down(va)) {
-			return false;
+		return false;
 	}
 
 	/* 나중의 이해를 돕기 위해 남겨 놓은 주석 */
@@ -452,7 +478,14 @@ validate_mmap_area(const void *va, size_t length) {
 	void *curr_va = va;
 
 	while (length >= PGSIZE) {
-		if (curr_va >= USER_STACK) {
+		// TODO: user stack에서 kernel base까지는 가능하게 짜야함 
+		if (curr_va >= KERN_BASE) {
+			return false; 
+		}
+
+		// curr_va >= USER_STACK - STACK_MAX_SIZE: user stack의 시작점 
+		// curr_va <= pg_round_down(USER_STACK): user stack의 끝 부분 
+		if (curr_va >= USER_STACK - STACK_MAX_SIZE && curr_va < pg_round_down(USER_STACK)) {
 			return false; 
 		}
 
@@ -465,7 +498,7 @@ validate_mmap_area(const void *va, size_t length) {
 	}
 
 	if (length > 0 && length < PGSIZE) {
-		if (curr_va + PGSIZE >= USER_STACK) {
+		if (curr_va >= USER_STACK - STACK_MAX_SIZE) {
 			return false;
 		}
 
@@ -473,8 +506,6 @@ validate_mmap_area(const void *va, size_t length) {
 			return false;
 		}
 	}
-
-
 
 	return true;
 }
