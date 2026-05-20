@@ -7,7 +7,7 @@
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
-static bool lazy_load_file (struct page *page, void *aux);
+
 static bool load_file (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 static void remove_page_from_spt(struct supplemental_page_table *spt, struct page *page); 
@@ -92,7 +92,7 @@ file_backed_destroy (struct page *page) {
 	file_close(page->file.file); 
 }
 
-static bool
+bool
 lazy_load_file (struct page *page, void *aux) {
 	struct file_aux *aux_ = (struct file_aux *) aux;
 
@@ -171,6 +171,7 @@ do_mmap (void *addr, size_t length, int writable,
 
 	/* # validation */
 	// # 읽을 크기가 0 이하이면 실패
+	
 	if (length <= 0) {
 		return NULL;
 	}
@@ -218,6 +219,7 @@ do_munmap (void *addr) {
 	}
 
 	void *start_va = page->file.start_va;
+	
 	off_t file_size = file_length(page->file.file);
 
 	if (file_size == 0) {
@@ -226,15 +228,17 @@ do_munmap (void *addr) {
 
 	void *current_page_va = start_va;
 
-	while (current_page_va <= pg_round_down(start_va + file_size - 1)) {
-		page = spt_find_page(&curr_process->spt, current_page_va);			
-	
+	while (page = spt_find_page(&curr_process->spt, current_page_va)) {	
+		if (page->file.start_va != start_va) {
+			break; 
+		} 
+
 		apply_dirty_page_to_disk(page); 
 		
 		pml4_clear_page(curr_process->pml4, current_page_va);	
 
 		remove_page_from_spt(&curr_process->spt, page); 
-		
+
 		current_page_va = current_page_va + PGSIZE;
 	}
 }
