@@ -130,6 +130,7 @@ spt_insert_page(struct supplemental_page_table *spt, struct page *page)
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	vm_dealloc_page (page);
+
 	return true;
 }
 
@@ -315,6 +316,7 @@ page_less (const struct hash_elem *a_,
 
 static void 
 page_hash_brown_destructor (struct hash_elem *e, void *aux UNUSED) {
+
 	struct page *page = hash_entry (e, struct page, hash_elem);
 	if (page == NULL) {
 		printf ("PAGE NULL\n\n");
@@ -334,10 +336,11 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	hash_first(&i, src);
 
 	while (hash_next (&i)) {
-    	struct page *source_page = hash_entry (hash_cur (&i), struct page, hash_elem);
+    	struct page *source_page = hash_entry (hash_cur  (&i), struct page, hash_elem);
 		enum vm_type type;
 		vm_initializer *init;
 		void *aux = NULL;
+		struct file_aux *file_aux = NULL; 
 
 		enum vm_type type_i_love_pintos = source_page->operations->type;
 
@@ -351,13 +354,18 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 			case (VM_ANON):
 				type = source_page->anon.type;
 				break;
-			case (VM_FILE):
-				type = VM_FILE;
+			case (VM_FILE):			
+				type = VM_FILE;			
+				file_aux = malloc (sizeof (struct file_aux)); 
+				file_aux->file = file_reopen(source_page->file.file);
+			    file_aux->offset = source_page->file.offset;
+				file_aux->page_read_bytes = source_page->file.page_read_bytes;
+				file_aux->start_va = source_page->file.start_va; 
+				file_aux->writable = source_page->file.writable;
 				break;
 			default:
 				NOT_REACHED ();
 		}
-
 		if (type_i_love_pintos == VM_ANON || type_i_love_pintos == VM_FILE) {
 			if (!vm_alloc_page (type, source_page->va, source_page->writable)) {
 				return false;
@@ -365,7 +373,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 				if (!vm_claim_page (source_page->va) ||
 					!memcpy (spt_find_page(dst, source_page->va)->frame->kva, source_page->frame->kva, PGSIZE)) {
 					return false;
-					}
+				}
+
 			}
 		} else {
 			if (!vm_alloc_page_with_initializer (type, source_page->va, source_page->writable, init, aux)) {
@@ -380,6 +389,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt) {
+
 	struct hash_iterator i;
 
 	if (hash_empty (&spt->hash_table)) {
@@ -387,6 +397,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	}
 
 	hash_first (&i, &spt->hash_table);
+
 	hash_destroy(&spt->hash_table, page_hash_brown_destructor);
 	
 	return;
