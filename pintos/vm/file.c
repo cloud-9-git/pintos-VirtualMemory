@@ -228,7 +228,7 @@ do_munmap (void *addr) {
 
 	void *current_page_va = start_va;
 
-	while (page = spt_find_page(&curr_process->spt, current_page_va)) {	
+	while (page = spt_find_page(&curr_process->spt, current_page_va) != NULL) {	
 		if (page->file.start_va != start_va) {
 			break; 
 		} 

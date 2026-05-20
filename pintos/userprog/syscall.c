@@ -220,6 +220,7 @@ syscall_handler (struct intr_frame *f) {
 			struct thread *curr_process = thread_current();
 			struct page* curr_page = spt_find_page(&curr_process->spt, buffer); 
 
+			while 
 			if (curr_page && !curr_page->writable) {
 				kill_process_due_to_bad_user_memory();
 			}
