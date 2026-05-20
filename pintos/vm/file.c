@@ -7,9 +7,11 @@
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
-static bool lazy_load_file (struct page *page, void *aux);
+
 static bool load_file (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+static void remove_page_from_spt(struct supplemental_page_table *spt, struct page *page); 
+static void apply_dirty_page_to_disk(struct page *page);
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
@@ -19,6 +21,25 @@ static const struct page_operations file_ops = {
 	.type = VM_FILE,
 };
 
+static void remove_page_from_spt(struct supplemental_page_table *spt, struct page *page) {
+	if (page == NULL) {
+		return; 
+	}
+
+	struct hash_elem *e = hash_delete(&spt->hash_table, &page->hash_elem);
+	
+	file_close(page->file.file); 
+	free(page); 
+}
+
+static void apply_dirty_page_to_disk(struct page *page) {
+	struct thread *curr_process = thread_current(); 
+
+	if (pml4_is_dirty(curr_process->pml4, page->va)) {
+		file_write_at(page->file.file, page->va, page->file.page_read_bytes, page->file.offset);	
+		pml4_set_dirty(curr_process->pml4, page->va, 0);			
+	}
+}
 /* The initializer of file vm */
 void
 vm_file_init (void) {
@@ -67,12 +88,11 @@ static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 
-	// do_munmap(page);
-	// printf("after do munmap\n\n"); 
-	// free(page->file.file);
+	apply_dirty_page_to_disk(page); 
+	file_close(page->file.file); 
 }
 
-static bool
+bool
 lazy_load_file (struct page *page, void *aux) {
 	struct file_aux *aux_ = (struct file_aux *) aux;
 
@@ -151,6 +171,7 @@ do_mmap (void *addr, size_t length, int writable,
 
 	/* # validation */
 	// # 읽을 크기가 0 이하이면 실패
+	
 	if (length <= 0) {
 		return NULL;
 	}
@@ -186,7 +207,6 @@ do_mmap (void *addr, size_t length, int writable,
 /* Do the munmap */
 void
 do_munmap (void *addr) {
-	printf("aa\n\n");
 	struct thread *curr_process = thread_current();
 	struct page *page = spt_find_page(&curr_process->spt, addr);
 
@@ -198,8 +218,8 @@ do_munmap (void *addr) {
 		return;
 	}
 
-
 	void *start_va = page->file.start_va;
+	
 	off_t file_size = file_length(page->file.file);
 
 	if (file_size == 0) {
@@ -208,22 +228,17 @@ do_munmap (void *addr) {
 
 	void *current_page_va = start_va;
 
-	while (current_page_va <= pg_round_down(start_va + file_size - 1)) {
-	
-		page = spt_find_page(&curr_process->spt, current_page_va);			
-		
-		if (pml4_is_dirty(curr_process->pml4, current_page_va)) {		
-			file_write_at(page->file.file, current_page_va, page->file.page_read_bytes, page->file.offset);	
-			pml4_set_dirty(curr_process->pml4, current_page_va, 0);
-		}  
+	while (page = spt_find_page(&curr_process->spt, current_page_va)) {	
+		if (page->file.start_va != start_va) {
+			break; 
+		} 
+
+		apply_dirty_page_to_disk(page); 
 		
 		pml4_clear_page(curr_process->pml4, current_page_va);	
 
-		file_close(page->file.file); 
-		spt_remove_page(&curr_process->spt, page); 
-		
+		remove_page_from_spt(&curr_process->spt, page); 
+
 		current_page_va = current_page_va + PGSIZE;
 	}
-
-
 }
