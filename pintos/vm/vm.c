@@ -359,7 +359,17 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 				type = VM_FILE;			
 				init = lazy_load_file;
 				file_aux = malloc (sizeof (struct file_aux)); 
+				
+				if (file_aux == NULL) {
+					return false; 
+				}
+
 				file_aux->file = file_reopen(source_page->file.file);
+
+				if (file_reopen == NULL) {
+					return false; 
+				}
+
 			    file_aux->offset = source_page->file.offset;
 				file_aux->page_read_bytes = source_page->file.page_read_bytes;
 				file_aux->start_va = source_page->file.start_va; 
