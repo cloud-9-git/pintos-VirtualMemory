@@ -7,11 +7,25 @@ struct page;
 enum vm_type;
 
 struct file_page {
-	enum vm_type type;
+	int writable; 
+	off_t offset; 	
+	size_t page_read_bytes;
+	struct file *file; 
+	void *start_va;
+};
+
+struct file_aux {
+	struct file *file;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+	off_t offset;
+	bool writable;
+	void *start_va;
 };
 
 void vm_file_init (void);
 bool file_backed_initializer (struct page *page, enum vm_type type, void *kva);
+bool lazy_load_file (struct page *page, void *aux);
 void *do_mmap(void *addr, size_t length, int writable,
 		struct file *file, off_t offset);
 void do_munmap (void *va);

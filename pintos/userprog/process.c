@@ -983,14 +983,6 @@ install_page (void *upage, void *kpage, bool writable) {
 /* 여기부터의 코드는 project 3 이후에 사용된다.
  * project 2만 대상으로 구현하려면 위쪽 블록에 구현하라. */
 
-// struct aux {
-// 	struct file *file;
-// 	size_t page_read_bytes;
-// 	size_t page_zero_bytes;
-// 	off_t offset;
-// 	bool writable;
-// };
-
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
