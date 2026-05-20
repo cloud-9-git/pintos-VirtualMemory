@@ -6,6 +6,7 @@
 #include "threads/mmu.h"
 #include <string.h>
 #include "userprog/process.h"
+#include "vm/file.h"
 /* Initializes the virtpual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -127,6 +128,7 @@ spt_insert_page(struct supplemental_page_table *spt, struct page *page)
 
     return e == NULL;
 }
+
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	vm_dealloc_page (page);
@@ -316,7 +318,6 @@ page_less (const struct hash_elem *a_,
 
 static void 
 page_hash_brown_destructor (struct hash_elem *e, void *aux UNUSED) {
-
 	struct page *page = hash_entry (e, struct page, hash_elem);
 	if (page == NULL) {
 		printf ("PAGE NULL\n\n");
@@ -356,6 +357,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 				break;
 			case (VM_FILE):			
 				type = VM_FILE;			
+				init = lazy_load_file;
 				file_aux = malloc (sizeof (struct file_aux)); 
 				file_aux->file = file_reopen(source_page->file.file);
 			    file_aux->offset = source_page->file.offset;
@@ -366,7 +368,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 			default:
 				NOT_REACHED ();
 		}
-		if (type_i_love_pintos == VM_ANON || type_i_love_pintos == VM_FILE) {
+		
+		if (type_i_love_pintos == VM_ANON) {
 			if (!vm_alloc_page (type, source_page->va, source_page->writable)) {
 				return false;
 			} else {
@@ -374,9 +377,9 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 					!memcpy (spt_find_page(dst, source_page->va)->frame->kva, source_page->frame->kva, PGSIZE)) {
 					return false;
 				}
-
 			}
-		} else {
+		} 
+		else {			
 			if (!vm_alloc_page_with_initializer (type, source_page->va, source_page->writable, init, aux)) {
 				return false;
 			}
@@ -389,7 +392,6 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt) {
-
 	struct hash_iterator i;
 
 	if (hash_empty (&spt->hash_table)) {
